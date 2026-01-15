@@ -72,10 +72,13 @@ program donatu_app.aleo {
 
     // Send donation with encryption
     // recipient is public so we can index donations
+    // Send donation with encryption
+    // recipient is public so we can index donations
     async transition send_donation(
         public recipient: address,
         private amount: u64,
-        private message: field
+        private message: field,
+        public timestamp: u64
     ) -> (Donation, Donation, Future) {
         let sender: address = self.caller;
         
@@ -86,7 +89,7 @@ program donatu_app.aleo {
             recipient: recipient,
             amount: amount,
             message: message,
-            timestamp: 0u64, // Will be set in finalize
+            timestamp: timestamp,
         };
 
         // Create sender donation record (owned by sender)
@@ -96,24 +99,25 @@ program donatu_app.aleo {
             recipient: recipient,
             amount: amount,
             message: message,
-            timestamp: 0u64, // Will be set in finalize
+            timestamp: timestamp,
         };
 
         // Hash message for indexing (privacy-preserving)
         let message_hash: field = BHP256::hash_to_field(message);
         
         // Pass metadata to finalize for indexing
-        return (recipient_donation, sender_donation, finalize_send_donation(recipient, sender, amount, message_hash));
+        return (recipient_donation, sender_donation, finalize_send_donation(recipient, sender, amount, message_hash, timestamp));
     }
 
     async function finalize_send_donation(
         recipient: address,
         sender: address,
         amount: u64,
-        message_hash: field
+        message_hash: field,
+        timestamp: u64
     ) {
-        // Get current block height as timestamp
-        let timestamp: u64 = block.height as u64;
+        // Use passed timestamp logic
+
         // Index for recipient (received donations)
         let recipient_count: u64 = Mapping::get_or_use(donation_count, recipient, 0u64);
         let recipient_field: field = BHP256::hash_to_field(recipient);
@@ -123,7 +127,7 @@ program donatu_app.aleo {
             sender: sender,
             recipient: recipient,
             amount: amount,
-            message_hash: message_hash,
+message_hash: message_hash,
             timestamp: timestamp,
         };
         Mapping::set(donation_index, recipient_index_key, recipient_meta);
@@ -145,4 +149,3 @@ program donatu_app.aleo {
         Mapping::set(sent_donation_count, sender, sender_count + 1u64);
     }
 }
-
