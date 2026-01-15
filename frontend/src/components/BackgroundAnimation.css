@@ -1,0 +1,48 @@
+.background-animation {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.background-canvas {
+  width: 100%;
+  height: 100%;
+  opacity: 0.6;
+}
+
+.ambient-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(
+    circle,
+    rgba(255, 0, 128, 0.1) 0%,
+    rgba(139, 92, 246, 0.1) 30%,
+    rgba(0, 212, 255, 0.1) 60%,
+    transparent 100%
+  );
+  border-radius: 50%;
+  animation: pulse 30s ease-in-out infinite;
+  filter: blur(60px);
+  will-change: transform, opacity;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1.2);
+  }
+}
+
