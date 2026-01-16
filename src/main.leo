@@ -96,4 +96,9 @@ program donatu_app_v5.aleo {
         };
         Mapping::set(profiles, user, info);
     }
+
+    // View function to read profile from mapping (public, no transaction needed)
+    transition get_profile(public address: address) -> ProfileInfo {
+        return Mapping::get(profiles, address);
+    }
 }
