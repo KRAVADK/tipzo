@@ -1,10 +1,11 @@
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { useState, useCallback } from "react";
+import { requestRecordsWithRetry, decryptWithRetry } from "../utils/walletUtils";
 
 export interface RecordDonation {
     owner: string;
-    sender: string;
-    recipient: string;
+    sender?: string; // Only in RecipientDonation
+    recipient?: string; // Only in SentDonation
     amount: number; // in microcredits
     message: string; // field as string
     timestamp: number;
@@ -44,10 +45,12 @@ export const useWalletRecords = () => {
                 }
             }
             
-            // Fallback: спроба через requestRecords (encrypted)
+            // Fallback: спроба через requestRecords (encrypted) with retry
             if (records.length === 0 && adapter.requestRecords) {
                 try {
-                    const encryptedRecords = await adapter.requestRecords(programId);
+                    console.log("[DonationRecords] 🔓 Fetching encrypted records...");
+                    const encryptedRecords = await requestRecordsWithRetry(adapter, programId);
+                    
                     if (encryptedRecords && encryptedRecords.length > 0) {
                         console.log(`✅ [DonationRecords] Fetched ${encryptedRecords.length} encrypted records via requestRecords`);
                         // Якщо є decrypt метод, спробуємо розшифрувати
@@ -56,12 +59,8 @@ export const useWalletRecords = () => {
                             for (const record of encryptedRecords) {
                                 try {
                                     if (typeof record === "string" && record.startsWith("record1")) {
-                                        const decrypted = await adapter.decrypt(record);
-                                        if (typeof decrypted === "string") {
-                                            decryptedRecords.push({ plaintext: decrypted });
-                                        } else {
-                                            decryptedRecords.push({ plaintext: JSON.stringify(decrypted) });
-                                        }
+                                        const decrypted = await decryptWithRetry(adapter, record);
+                                        decryptedRecords.push({ plaintext: decrypted });
                                     } else if (typeof record === "object" && record !== null) {
                                         const obj = record as Record<string, unknown>;
                                         const ciphertext =
@@ -69,7 +68,7 @@ export const useWalletRecords = () => {
                                             (typeof obj.record === "string" && obj.record) ||
                                             "";
                                         if (ciphertext && ciphertext.startsWith("record1")) {
-                                            const decrypted = await adapter.decrypt(ciphertext);
+                                            const decrypted = await decryptWithRetry(adapter, ciphertext);
                                             decryptedRecords.push({
                                                 id: typeof obj.id === "string" ? obj.id : undefined,
                                                 plaintext: typeof decrypted === "string" ? decrypted : JSON.stringify(decrypted),
@@ -119,18 +118,12 @@ export const useWalletRecords = () => {
 };
 
 // Helper для парсингу Leo record у TypeScript об'єкт
+// New structure:
+// - RecipientDonation: owner (recipient), sender, amount, message, timestamp
+// - SentDonation: owner (sender), recipient, amount, message, timestamp
 function parseDonationRecord(recordString: string): RecordDonation | null {
     try {
-        // Leo record format for Donation:
-        // {
-        //   owner: aleo1...,
-        //   sender: aleo1...,
-        //   recipient: aleo1...,
-        //   amount: 1000000u64,
-        //   message: 123456field,
-        //   timestamp: 1234567890u64,
-        //   _nonce: ...
-        // }
+        console.log("[DonationRecords] 🔍 Parsing record:", recordString.substring(0, 200) + "...");
         
         const ownerMatch = recordString.match(/owner:\s*(aleo1[a-z0-9]+)/);
         const senderMatch = recordString.match(/sender:\s*(aleo1[a-z0-9]+)/);
@@ -140,19 +133,37 @@ function parseDonationRecord(recordString: string): RecordDonation | null {
         const timestampMatch = recordString.match(/timestamp:\s*(\d+)u64/);
         const nonceMatch = recordString.match(/_nonce:\s*([a-zA-Z0-9]+)/);
         
-        if (!ownerMatch || !senderMatch || !recipientMatch || !amountMatch || !timestampMatch) {
+        if (!ownerMatch || !amountMatch || !timestampMatch) {
+            console.warn("[DonationRecords] Missing required fields (owner, amount, timestamp)");
             return null;
         }
         
-        return {
+        // Determine record type: RecipientDonation has sender, SentDonation has recipient
+        const isRecipientDonation = !!senderMatch && !recipientMatch;
+        const isSentDonation = !!recipientMatch && !senderMatch;
+        
+        if (!isRecipientDonation && !isSentDonation) {
+            console.warn("[DonationRecords] Record doesn't match RecipientDonation or SentDonation structure");
+            return null;
+        }
+        
+        const parsed: RecordDonation = {
             owner: ownerMatch[1],
-            sender: senderMatch[1],
-            recipient: recipientMatch[1],
             amount: parseInt(amountMatch[1], 10), // Keep in microcredits
             message: messageMatch?.[1] || "",
             timestamp: parseInt(timestampMatch[1], 10),
             nonce: nonceMatch?.[1],
         };
+        
+        if (isRecipientDonation && senderMatch) {
+            parsed.sender = senderMatch[1];
+            console.log(`[DonationRecords] ✅ Parsed RecipientDonation: owner=${parsed.owner}, sender=${parsed.sender}`);
+        } else if (isSentDonation && recipientMatch) {
+            parsed.recipient = recipientMatch[1];
+            console.log(`[DonationRecords] ✅ Parsed SentDonation: owner=${parsed.owner}, recipient=${parsed.recipient}`);
+        }
+        
+        return parsed;
     } catch (error) {
         console.error("[DonationRecords] Failed to parse record:", error);
         return null;

@@ -90,12 +90,18 @@ export function useDonationHistory(userAddress: string | null) {
         const loadReceived = async () => {
             try {
                 const walletRecords = await fetchRecords(PROGRAM_ID);
+                // RecipientDonation: owner = recipient, sender, amount, message, timestamp
                 const receivedFromWallet = walletRecords
-                    .filter(record => record.recipient.toLowerCase() === userAddress.toLowerCase())
+                    .filter(record => {
+                        // RecipientDonation: owner = recipient, has sender field, NO recipient field
+                        return record.owner?.toLowerCase() === userAddress.toLowerCase() && 
+                               record.sender && // Has sender field (RecipientDonation)
+                               !record.recipient; // RecipientDonation doesn't have recipient field
+                    })
                     .map(record => ({
-                        id: record.nonce || `${record.sender}-${record.timestamp}`,
-                        sender: record.sender,
-                        receiver: record.recipient,
+                        id: record.nonce || `${record.sender || 'unknown'}-${record.timestamp}`,
+                        sender: record.sender || 'unknown',
+                        receiver: userAddress, // Owner is the recipient
                         amount: record.amount,
                         message: record.message || '[Encrypted]',
                         timestamp: record.timestamp,
@@ -168,12 +174,19 @@ export function useDonationHistory(userAddress: string | null) {
                 const walletRecords = await fetchRecords(PROGRAM_ID);
                 
                 // Filter records where current user is the recipient
+                // RecipientDonation has: owner (recipient), sender, amount, message, timestamp
+                // SentDonation has: owner (sender), recipient, amount, message, timestamp
                 receivedFromWallet = walletRecords
-                    .filter(record => record.recipient.toLowerCase() === userAddress.toLowerCase())
+                    .filter(record => {
+                        // RecipientDonation: owner = recipient, has sender field
+                        return record.owner?.toLowerCase() === userAddress.toLowerCase() && 
+                               record.sender && // Has sender field (RecipientDonation)
+                               !record.recipient; // RecipientDonation doesn't have recipient field
+                    })
                     .map(record => ({
                         id: record.nonce || `${record.sender}-${record.timestamp}`,
                         sender: record.sender,
-                        receiver: record.recipient,
+                        receiver: userAddress, // Owner is the recipient
                         amount: record.amount, // Already in microcredits
                         message: record.message || '[Encrypted]',
                         timestamp: record.timestamp,
@@ -267,6 +280,7 @@ export function useDonationHistory(userAddress: string | null) {
         window.addEventListener('donation-sent', handleDonationSent);
 
         // Set up interval to sync with wallet records periodically (blockchain is source of truth)
+        // Reduced to 5 seconds for faster updates
         const interval = setInterval(async () => {
             console.log('[History] 🔄 Syncing with blockchain...');
             
@@ -276,52 +290,74 @@ export function useDonationHistory(userAddress: string | null) {
                 setSent(sentTxs);
             }
             
-            // Sync received donations from wallet records (blockchain)
-            try {
-                const walletRecords = await fetchRecords(PROGRAM_ID);
-                const receivedFromWallet = walletRecords
-                    .filter(record => record.recipient.toLowerCase() === userAddress.toLowerCase())
-                    .map(record => ({
-                        id: record.nonce || `${record.sender}-${record.timestamp}`,
-                        sender: record.sender,
-                        receiver: record.recipient,
-                        amount: record.amount,
-                        message: record.message || '[Encrypted]',
-                        timestamp: record.timestamp,
-                        status: 'confirmed' as const,
-                        explorerUrl: `https://testnet.explorer.provable.com/transaction/${record.nonce || ''}`,
-                        program: PROGRAM_ID,
-                        function: 'send_donation',
-                    }));
-
-                if (receivedFromWallet.length > 0) {
-                    // Update cache
-                    const recipientHistoryKey = `donatu_received_${userAddress}`;
-                    const cachedData = receivedFromWallet.map(tx => ({
-                        txId: tx.id,
-                        sender: tx.sender,
-                        amount: tx.amount / 1_000_000,
-                        message: tx.message,
-                        timestamp: tx.timestamp * 1000,
-                        status: "Success"
-                    }));
-                    localStorage.setItem(recipientHistoryKey, JSON.stringify(cachedData));
+            // Sync received donations from wallet records (blockchain) with retry
+            let retries = 3;
+            let success = false;
+            
+            while (retries > 0 && !success) {
+                try {
+                    console.log(`[History] 🔓 Fetching records (${4 - retries}/3)...`);
+                    const walletRecords = await fetchRecords(PROGRAM_ID);
                     
-                    setReceived(receivedFromWallet);
-                    console.log('[History] ✅ Synced', receivedFromWallet.length, 'received donations from blockchain');
-                } else {
-                    // No new donations, keep current state
-                    console.log('[History] ℹ️ No new received donations');
-                }
-            } catch (err) {
-                console.warn('[History] ⚠️ Wallet sync failed, using cache:', err);
-                // Fallback to cache
-                const receivedTxs = loadReceivedFromLocalStorage();
-                if (receivedTxs.length > 0) {
-                    setReceived(receivedTxs);
+                    // Filter records where current user is the recipient (RecipientDonation)
+                    const receivedFromWallet = walletRecords
+                        .filter(record => {
+                            // RecipientDonation has owner = recipient, sender = sender
+                            // Check if owner matches userAddress (user received this donation)
+                            return record.owner?.toLowerCase() === userAddress.toLowerCase() && 
+                                   record.sender && // Has sender field (RecipientDonation)
+                                   !record.recipient; // RecipientDonation doesn't have recipient field
+                        })
+                        .map(record => ({
+                            id: record.nonce || `${record.sender || 'unknown'}-${record.timestamp}`,
+                            sender: record.sender || 'unknown',
+                            receiver: userAddress, // Owner is the recipient
+                            amount: record.amount,
+                            message: record.message || '[Encrypted]',
+                            timestamp: record.timestamp,
+                            status: 'confirmed' as const,
+                            explorerUrl: `https://testnet.explorer.provable.com/transaction/${record.nonce || ''}`,
+                            program: PROGRAM_ID,
+                            function: 'send_donation',
+                        }));
+
+                    if (receivedFromWallet.length > 0) {
+                        // Update cache
+                        const recipientHistoryKey = `donatu_received_${userAddress}`;
+                        const cachedData = receivedFromWallet.map(tx => ({
+                            txId: tx.id,
+                            sender: tx.sender,
+                            amount: tx.amount / 1_000_000,
+                            message: tx.message,
+                            timestamp: tx.timestamp * 1000,
+                            status: "Success"
+                        }));
+                        localStorage.setItem(recipientHistoryKey, JSON.stringify(cachedData));
+                        
+                        setReceived(receivedFromWallet);
+                        console.log('[History] ✅ Synced', receivedFromWallet.length, 'received donations from blockchain');
+                    } else {
+                        // No new donations, keep current state
+                        console.log('[History] ℹ️ No new received donations');
+                    }
+                    
+                    success = true;
+                } catch (err) {
+                    retries--;
+                    if (retries > 0) {
+                        console.warn(`[History] ⚠️ Wallet sync failed, retrying in 2s... (${retries} attempts left)`, err);
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    } else {
+                        console.warn('[History] ⚠️ Wallet sync failed after retries, using cache:', err);
+                        // Fallback to cache
+                        const receivedTxs = loadReceivedFromLocalStorage();
+                        if (receivedTxs.length > 0) {
+                            setReceived(receivedTxs);
+                        }
+                    }
                 }
             }
-        }, 30000); // 30 seconds - sync with blockchain
+        }, 5000); // 5 seconds - faster sync with blockchain
 
         return () => {
             clearInterval(interval);

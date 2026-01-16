@@ -5,6 +5,9 @@ import { WalletAdapterNetwork, Transaction } from "@demox-labs/aleo-wallet-adapt
 import { PROGRAM_ID } from "../deployed_program";
 import { stringToField, formatAddress } from "../utils/aleo";
 import { logger } from "../utils/logger";
+import { requestTransactionWithRetry } from "../utils/walletUtils";
+
+const MAX_RETRIES = 3;
 import { SuccessModal } from "../components/SuccessModal";
 import "./Profile.css";
 
@@ -189,7 +192,12 @@ export const Profile = () => {
             });
             
             setStatus("Please confirm the token transfer in your wallet...");
-            const transferTxId = await adapter.requestTransaction(transferTransaction);
+            console.log("[Contract] 🔐 Calling transfer_public()");
+            const transferTxId = await requestTransactionWithRetry(adapter, transferTransaction, {
+                onRetry: (attempt) => {
+                    setStatus(`Waiting for wallet response... (Retry ${attempt}/${MAX_RETRIES})`);
+                }
+            });
             
             if (!transferTxId) {
                 throw new Error("Token transfer was rejected or failed");
@@ -205,12 +213,23 @@ export const Profile = () => {
             setStatus("Step 2/2: Creating donation record...");
             logger.transaction.signing();
             
+            // New contract signature: send_donation(private recipient, private amount, private message, public timestamp)
+            const timestamp = Math.floor(Date.now() / 1000);
+            const timestampParam = BigInt(timestamp).toString() + "u64";
+            
+            // Private parameters need .private suffix
+            const recipientPrivate = displayAddress + ".private";
+            const amountPrivate = amountU64.toString() + "u64.private";
+            const messagePrivate = messageField + ".private";
+            
+            console.log("[Contract] 🔐 Calling private send_donation()");
             console.log("📋 Creating donation transaction with params:", {
-                recipient: displayAddress,
-                amount: amountParam,
+                recipient: recipientPrivate,
+                amount: amountPrivate,
+                message: messagePrivate.substring(0, 50) + "...",
+                timestamp: timestampParam,
                 amountNum: amountNum,
-                microcredits: microcredits,
-                messageLength: messageField.length
+                microcredits: microcredits
             });
 
             const transaction = Transaction.createTransaction(
@@ -218,13 +237,17 @@ export const Profile = () => {
                 network,
                 PROGRAM_ID,
                 "send_donation",
-                [displayAddress, amountParam, messageField],
+                [recipientPrivate, amountPrivate, messagePrivate, timestampParam],
                 50000, // Minimal fee for donation record (0.05 ALEO)
                 false
             );
 
             setStatus("Please confirm the donation record in your wallet...");
-            const txId = await adapter.requestTransaction(transaction);
+            const txId = await requestTransactionWithRetry(adapter, transaction, {
+                onRetry: (attempt) => {
+                    setStatus(`Waiting for wallet response... (Retry ${attempt}/${MAX_RETRIES})`);
+                }
+            });
 
             if (txId) {
                 logger.transaction.confirmed(txId);
