@@ -71,60 +71,32 @@ export const Profile = () => {
     }, [displayAddress, publicKey]);
 
     const handleSaveProfile = async () => {
-        if (!publicKey || !adapter?.requestTransaction) {
+        if (!publicKey) {
             alert("Please connect your wallet");
             return;
         }
 
         setIsProcessing(true);
-        
-        // Check if profile already exists
-        const profileExists = profile?.name || profile?.bio;
-        const functionName = profileExists ? "update_profile" : "create_profile";
-        const actionText = profileExists ? "Updating" : "Creating";
-        
-        setStatus(`${actionText} profile transaction...`);
-        logger.profile.updated(name);
+        setStatus("Saving profile locally...");
 
         try {
-            const nameField = stringToField(name);
-            const bioField = stringToField(bio);
-
-            logger.transaction.signing();
-
-            const transaction = Transaction.createTransaction(
-                publicKey,
-                network,
-                PROGRAM_ID,
-                functionName, // Use update_profile if profile exists, create_profile otherwise
-                [nameField, bioField],
-                50000, // Minimal fee (0.05 ALEO)
-                false
-            );
-
-            setStatus("Please confirm the transaction in your wallet...");
-            const txId = await adapter.requestTransaction(transaction);
-
-            if (txId) {
-                logger.transaction.confirmed(txId);
-                if (profileExists) {
-                    logger.profile.updated(publicKey);
-                } else {
-                    logger.profile.created(publicKey);
-                }
-                setStatus(`Profile ${profileExists ? 'updated' : 'created'}! Transaction ID: ` + txId);
-
-                // Save locally
-                const profileKey = `donatu_profile_${publicKey}`;
-                localStorage.setItem(profileKey, JSON.stringify({ name, bio, is_public: isPublic }));
-                setProfile({ name, bio, address: publicKey, is_public: isPublic });
-                setIsEditing(false);
-
-                setTimeout(() => setStatus(""), 5000);
-            }
+            // Save profile ONLY in localStorage (not in blockchain)
+            // This keeps profiles private and optional - no global index
+            const profileKey = `donatu_profile_${publicKey}`;
+            localStorage.setItem(profileKey, JSON.stringify({ 
+                name, 
+                bio, 
+                is_public: isPublic 
+            }));
+            
+            setProfile({ name, bio, address: publicKey, is_public: isPublic });
+            setIsEditing(false);
+            setStatus("Profile saved! (stored locally, not on blockchain)");
+            
+            logger.profile.updated(publicKey);
+            setTimeout(() => setStatus(""), 3000);
         } catch (e: unknown) {
             const errorMsg = e instanceof Error ? e.message : String(e);
-            logger.transaction.failed(errorMsg);
             logger.error("Profile", errorMsg);
             setStatus("Error: " + errorMsg);
         } finally {
@@ -335,9 +307,12 @@ export const Profile = () => {
                                     style={{ width: "18px", height: "18px", cursor: "pointer" }}
                                 />
                                 <span style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
-                                    {isPublic ? "🌐 Public (visible in explore)" : "🔒 Private (hidden from explore)"}
+                                    {isPublic ? "🌐 Public (visible if someone searches)" : "🔒 Private (hidden from search)"}
                                 </span>
                             </label>
+                            <p style={{ fontSize: "0.75rem", color: "var(--text-tertiary)", marginTop: "0.25rem", fontStyle: "italic" }}>
+                                Profile is stored locally only. No blockchain storage = full privacy.
+                            </p>
                         </div>
                     )}
                 </div>
@@ -365,7 +340,10 @@ export const Profile = () => {
                     <p className="profile-edit-hint">
                         {profile?.name 
                             ? "Update your profile information below" 
-                            : "Create your profile to let others know who you are"}
+                            : "Create a local profile (optional). Stored only in your browser, not on blockchain."}
+                    </p>
+                    <p style={{ fontSize: "0.85rem", color: "var(--text-tertiary)", marginTop: "0.5rem" }}>
+                        💡 Profiles are optional. You can donate to any address without creating a profile.
                     </p>
                     <div className="form-group">
                         <label>Name</label>
