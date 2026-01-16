@@ -132,63 +132,25 @@ export const Profile = () => {
         }
     };
 
-    const handleToggleVisibility = async () => {
-        if (!publicKey || !adapter?.requestTransaction) {
-            alert("Please connect your wallet");
+    const handleToggleVisibility = () => {
+        if (!isOwnProfile || !publicKey) {
             return;
         }
 
-        if (!isOwnProfile) {
-            alert("Only profile owner can change visibility");
-            return;
-        }
-
-        setIsProcessing(true);
         const newVisibility = !isPublic;
-        setStatus(`Setting profile ${newVisibility ? 'public' : 'private'}...`);
-
-        try {
-            const transaction = Transaction.createTransaction(
-                publicKey,
-                network,
-                PROGRAM_ID,
-                "set_profile_visibility",
-                [newVisibility ? "true" : "false"],
-                50000, // Minimal fee (0.05 ALEO)
-                false
-            );
-
-            setStatus("Please confirm the transaction in your wallet...");
-            const txId = await requestTransactionWithRetry(adapter, transaction, {
-                onRetry: (attempt) => {
-                    setStatus(`Waiting for wallet response... (Retry ${attempt}/${MAX_RETRIES})`);
-                }
-            });
-
-            if (txId) {
-                logger.transaction.confirmed(txId);
-                setIsPublic(newVisibility);
-                
-                // Update local storage
-                const profileKey = `donatu_profile_${publicKey}`;
-                const existing = localStorage.getItem(profileKey);
-                if (existing) {
-                    const data = JSON.parse(existing);
-                    data.is_public = newVisibility;
-                    localStorage.setItem(profileKey, JSON.stringify(data));
-                }
-                
-                setProfile(prev => prev ? { ...prev, is_public: newVisibility } : null);
-                setStatus(`Profile is now ${newVisibility ? 'public' : 'private'}!`);
-                setTimeout(() => setStatus(""), 5000);
-            }
-        } catch (e: unknown) {
-            const errorMsg = e instanceof Error ? e.message : String(e);
-            logger.transaction.failed(errorMsg);
-            setStatus("Error: " + errorMsg);
-        } finally {
-            setIsProcessing(false);
+        setIsPublic(newVisibility);
+        
+        // Update local storage (no blockchain transaction needed - this is UI preference)
+        const profileKey = `donatu_profile_${publicKey}`;
+        const existing = localStorage.getItem(profileKey);
+        if (existing) {
+            const data = JSON.parse(existing);
+            data.is_public = newVisibility;
+            localStorage.setItem(profileKey, JSON.stringify(data));
         }
+        
+        setProfile(prev => prev ? { ...prev, is_public: newVisibility } : null);
+        console.log(`Profile visibility set to ${newVisibility ? 'public' : 'private'}`);
     };
 
     const handleDonate = async () => {
