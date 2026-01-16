@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { formatAddress } from "../utils/aleo";
+import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
+import { WalletAdapterNetwork, Transaction } from "@demox-labs/aleo-wallet-adapter-base";
+import { PROGRAM_ID } from "../deployed_program";
+import { formatAddress, fieldToString } from "../utils/aleo";
+import { requestTransactionWithRetry } from "../utils/walletUtils";
 import "./Search.css";
 
 interface SearchResult {
@@ -14,62 +18,80 @@ export const Search = () => {
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const navigate = useNavigate();
+    const { publicKey, wallet } = useWallet();
+    const adapter = wallet?.adapter as any;
+    const network = WalletAdapterNetwork.TestnetBeta;
 
-    // In a real app, this would query the blockchain
-    // For now, we'll search localStorage profiles
-    const searchProfiles = (searchQuery: string) => {
+    // Search profiles - uses localStorage for name search, blockchain for address lookup
+    const searchProfiles = async (searchQuery: string) => {
         if (!searchQuery.trim()) {
             setResults([]);
             return;
         }
 
         setIsSearching(true);
-        const allKeys = Object.keys(localStorage);
-        const profileKeys = allKeys.filter(key => key.startsWith("donatu_profile_"));
         const found: SearchResult[] = [];
 
-        for (const key of profileKeys) {
-            try {
-                const address = key.replace("donatu_profile_", "");
-                const profileData = JSON.parse(localStorage.getItem(key) || "{}");
-                
-                const queryLower = searchQuery.toLowerCase();
-                const nameMatch = profileData.name?.toLowerCase().includes(queryLower);
-                const addressMatch = address.toLowerCase().includes(queryLower);
-                
-                if (nameMatch || addressMatch) {
-                    found.push({
-                        address,
-                        name: profileData.name,
-                        bio: profileData.bio
-                    });
-                }
-            } catch (e) {
-                console.warn("Failed to parse profile:", e);
-            }
-        }
+        try {
+            // Search in localStorage (profiles are cached there after creation/update)
+            const allKeys = Object.keys(localStorage);
+            const profileKeys = allKeys.filter(key => key.startsWith("donatu_profile_"));
+            
+            const queryLower = searchQuery.toLowerCase();
 
-        // Also check if query is a valid address format
-        if (searchQuery.startsWith("aleo1") && searchQuery.length > 10) {
-            const existing = found.find(r => r.address === searchQuery);
-            if (!existing) {
-                // Try to load profile from localStorage if it exists
-                const profileKey = `donatu_profile_${searchQuery}`;
-                const profileData = localStorage.getItem(profileKey);
-                let profileInfo: SearchResult = { address: searchQuery };
-                
-                if (profileData) {
-                    try {
-                        const parsed = JSON.parse(profileData);
-                        profileInfo.name = parsed.name;
-                        profileInfo.bio = parsed.bio;
-                    } catch (e) {
-                        console.warn("Failed to parse profile for address:", e);
+            for (const key of profileKeys) {
+                try {
+                    const address = key.replace("donatu_profile_", "");
+                    const profileData = JSON.parse(localStorage.getItem(key) || "{}");
+                    
+                    const nameMatch = profileData.name?.toLowerCase().includes(queryLower);
+                    const addressMatch = address.toLowerCase().includes(queryLower);
+                    
+                    if (nameMatch || addressMatch) {
+                        found.push({
+                            address,
+                            name: profileData.name,
+                            bio: profileData.bio
+                        });
+                    }
+                } catch (e) {
+                    console.warn("Failed to parse profile:", e);
+                }
+            }
+
+            // If query is a valid address, try to fetch from blockchain if not found in localStorage
+            if (searchQuery.startsWith("aleo1") && searchQuery.length > 10) {
+                const existing = found.find(r => r.address === searchQuery);
+                if (!existing) {
+                    // Try to load from localStorage first
+                    const profileKey = `donatu_profile_${searchQuery}`;
+                    const profileData = localStorage.getItem(profileKey);
+                    
+                    if (profileData) {
+                        try {
+                            const parsed = JSON.parse(profileData);
+                            found.push({
+                                address: searchQuery,
+                                name: parsed.name,
+                                bio: parsed.bio
+                            });
+                        } catch (e) {
+                            console.warn("Failed to parse profile for address:", e);
+                        }
+                    } else {
+                        // Try to fetch from blockchain using get_profile view function
+                        // Note: This requires a transaction, so we'll just add the address
+                        // The profile will be loaded when user clicks on it
+                        found.push({
+                            address: searchQuery,
+                            name: undefined, // Will be loaded from blockchain when viewing profile
+                            bio: undefined
+                        });
                     }
                 }
-                
-                found.push(profileInfo);
             }
+        } catch (e) {
+            console.warn("Search error:", e);
         }
 
         setResults(found);
@@ -93,6 +115,9 @@ export const Search = () => {
             <div className="search-header">
                 <h1>Search Users</h1>
                 <p className="search-subtitle">Find users by address or nickname</p>
+                <p className="search-hint" style={{ fontSize: "0.9em", opacity: 0.7, marginTop: "0.5em" }}>
+                    Profiles are searched from local cache. Enter an address to view any profile.
+                </p>
             </div>
 
             <div className="search-box glass">
@@ -140,10 +165,13 @@ export const Search = () => {
             {query && !isSearching && results.length === 0 && (
                 <div className="no-results">
                     <p>No users found matching "{query}"</p>
-                    <p className="no-results-hint">Try searching by address or nickname</p>
+                    <p className="no-results-hint">
+                        {query.startsWith("aleo1") 
+                            ? "You can still view this profile by clicking the address"
+                            : "Try searching by address (aleo1...) or nickname"}
+                    </p>
                 </div>
             )}
         </div>
     );
 };
-
