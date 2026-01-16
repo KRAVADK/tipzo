@@ -1,4 +1,4 @@
-program donatu_appv4.aleo {
+program donatu_app.aleo {
     // This is the constructor for the program.
     // It is called when the program is deployed.
     @noupgrade
