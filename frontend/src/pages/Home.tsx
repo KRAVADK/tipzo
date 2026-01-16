@@ -241,7 +241,7 @@ export const Home = () => {
                     Send <span className="gradient-text">Private Donations</span> on Aleo
                 </h1>
                 <p className="hero-subtitle">
-                    Support creators and causes with fully encrypted, private donations on the Aleo blockchain
+                    Fully encrypted, private donations. Just enter an address and donate.
                 </p>
                 <div className="hero-actions">
                     <button
@@ -249,7 +249,7 @@ export const Home = () => {
                         onClick={() => setShowQuickDonate(true)}
                         disabled={!publicKey}
                     >
-                        Quick Donate
+                        Send Donation
                     </button>
                     {publicKey && (
                         <button
@@ -259,12 +259,14 @@ export const Home = () => {
                             My Profile
                         </button>
                     )}
-                    <button
-                        className="btn-secondary"
-                        onClick={() => navigate("/search")}
-                    >
-                        Find Users
-                    </button>
+                    {publicKey && (
+                        <button
+                            className="btn-secondary"
+                            onClick={() => navigate("/history")}
+                        >
+                            History
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -290,7 +292,7 @@ export const Home = () => {
                 <div className="modal-overlay" onClick={() => !isProcessing && setShowQuickDonate(false)}>
                     <div className="modal-content quick-donate-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>Quick Donate</h2>
+                            <h2>Send Donation</h2>
                             <button
                                 className="close-button"
                                 onClick={() => setShowQuickDonate(false)}
@@ -300,31 +302,9 @@ export const Home = () => {
                             </button>
                         </div>
                         <div className="modal-body">
-                            {popularUsers.length > 0 && (
-                                <div className="user-list-section">
-                                    <label className="section-label">Popular Users</label>
-                                    <div className="user-list">
-                                        {popularUsers.map((user) => (
-                                            <button
-                                                key={user.address}
-                                                className="user-chip"
-                                                onClick={() => handleSelectUser(user.address)}
-                                                disabled={isProcessing}
-                                            >
-                                                <span className="user-chip-avatar">
-                                                    {user.name ? user.name.charAt(0).toUpperCase() : user.address.slice(2, 3).toUpperCase()}
-                                                </span>
-                                                <span className="user-chip-name">{user.name || formatAddress(user.address)}</span>
-                                                <span className="user-chip-badge">{user.count} donations</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
                             {recentRecipients.length > 0 && (
                                 <div className="user-list-section">
-                                    <label className="section-label">Recent Recipients</label>
+                                    <label className="section-label">Recent Recipients (optional)</label>
                                     <div className="user-list">
                                         {recentRecipients.map((user) => (
                                             <button
@@ -344,7 +324,7 @@ export const Home = () => {
                             )}
 
                             <div className="form-group">
-                                <label>Recipient Address or Nickname</label>
+                                <label>Recipient Address</label>
                                 <input
                                     type="text"
                                     placeholder="aleo1..."
@@ -352,6 +332,9 @@ export const Home = () => {
                                     onChange={(e) => setRecipient(e.target.value)}
                                     disabled={isProcessing}
                                 />
+                                <p style={{ fontSize: "0.85rem", color: "var(--text-tertiary)", marginTop: "0.5rem" }}>
+                                    Enter any Aleo address to send a private donation. No profile needed.
+                                </p>
                             </div>
                             <div className="form-group">
                                 <label>Amount (ALEO)</label>

@@ -107,16 +107,15 @@ export const Header: FC<HeaderProps> = ({ programId }) => {
                         <Link to="/" className={`nav-link ${isActive("/") ? "active" : ""}`}>
                             Home
                         </Link>
-                        <Link to="/search" className={`nav-link ${isActive("/search") ? "active" : ""}`}>
-                            Search
-                        </Link>
-                        <Link to="/history" className={`nav-link ${isActive("/history") ? "active" : ""}`}>
-                            History
-                        </Link>
                         {publicKey && (
-                            <Link to={`/profile/${publicKey}`} className={`nav-link ${isActive(`/profile/${publicKey}`) ? "active" : ""}`}>
-                                My Profile
-                            </Link>
+                            <>
+                                <Link to="/history" className={`nav-link ${isActive("/history") ? "active" : ""}`}>
+                                    History
+                                </Link>
+                                <Link to={`/profile/${publicKey}`} className={`nav-link ${isActive(`/profile/${publicKey}`) ? "active" : ""}`}>
+                                    My Profile
+                                </Link>
+                            </>
                         )}
                     </nav>
 
