@@ -254,35 +254,9 @@ export const Profile = () => {
                 logger.donation.sent(txId);
                 setStatus(`Donation sent! Transfer: ${transferTxId.slice(0, 8)}... Donation: ${txId.slice(0, 8)}...`);
 
-                // Save to history (use donation txId as main ID, but note transfer was done)
-                const historyKey = `donatu_sent_${publicKey}`;
-                const existing = JSON.parse(localStorage.getItem(historyKey) || "[]");
-                
-                // Check if transaction already exists (avoid duplicates)
-                const exists = existing.find((tx: any) => tx.txId === txId || tx.transferTxId === transferTxId);
-                if (!exists) {
-                    existing.unshift({
-                        txId: txId, // Donation transaction ID
-                        transferTxId: transferTxId, // Transfer transaction ID
-                        recipient: displayAddress,
-                        amount: amountNum,
-                        message: donateMessage || "",
-                        timestamp: Date.now(),
-                        status: "Success" // Mark as Success since both transactions were confirmed
-                    });
-                    localStorage.setItem(historyKey, JSON.stringify(existing));
-                    console.log("💾 Saved donation to sent history:", {
-                        transferTxId,
-                        donationTxId: txId,
-                        total: existing.length
-                    });
-                    
-                    // Note: Received donations are fetched from blockchain via wallet records
-                    // No need to save to recipient's localStorage - they will sync from blockchain
-                    
-                    // Trigger refresh event (recipient will sync from blockchain)
-                    window.dispatchEvent(new CustomEvent('donation-sent', { detail: { txId, transferTxId } }));
-                } else {
+                // Donation is saved in wallet records - no localStorage needed
+                // History will sync automatically from wallet in 5 seconds
+                console.log("✅ Donation sent! Will sync from wallet records automatically"); else {
                     console.log("⚠️ Transaction already in history:", txId);
                 }
 

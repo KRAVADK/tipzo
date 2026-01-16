@@ -6,6 +6,7 @@ import { PROGRAM_ID } from "../deployed_program";
 import { stringToField, formatAddress } from "../utils/aleo";
 import { logger } from "../utils/logger";
 import { requestTransactionWithRetry } from "../utils/walletUtils";
+import { useDonationHistory } from "../hooks/useDonationHistory";
 import { SuccessModal } from "../components/SuccessModal";
 import "./Home.css";
 
@@ -21,6 +22,7 @@ export const Home = () => {
     const adapter = wallet?.adapter as unknown as WalletAdapterExtras | undefined;
     const network = WalletAdapterNetwork.TestnetBeta;
     const navigate = useNavigate();
+    const { sent } = useDonationHistory(publicKey);
 
     const [showQuickDonate, setShowQuickDonate] = useState(false);
     const [recipient, setRecipient] = useState("");
@@ -31,55 +33,28 @@ export const Home = () => {
     const [showSuccess, setShowSuccess] = useState(false);
     const [successTxId, setSuccessTxId] = useState<string | undefined>();
 
-    // Get popular users (top 5 by received donations)
+    // Get popular users - removed (no localStorage, only wallet sync)
+    // Popular users would require aggregating data from blockchain which is not efficient
     const popularUsers = useMemo(() => {
-        const allKeys = Object.keys(localStorage);
-        const donationKeys = allKeys.filter(key => key.startsWith("donatu_received_"));
-        const userStats: Map<string, { address: string; count: number; total: number; name?: string }> = new Map();
-
-        donationKeys.forEach(key => {
-            try {
-                const donations = JSON.parse(localStorage.getItem(key) || "[]");
-                const address = key.replace("donatu_received_", "");
-                const profileKey = `donatu_profile_${address}`;
-                const profile = localStorage.getItem(profileKey);
-                const profileData = profile ? JSON.parse(profile) : {};
-
-                userStats.set(address, {
-                    address,
-                    count: donations.length,
-                    total: donations.reduce((sum: number, d: any) => sum + (d.amount || 0), 0),
-                    name: profileData.name
-                });
-            } catch (e) {
-                console.warn("Failed to parse donations:", e);
-            }
-        });
-
-        return Array.from(userStats.values())
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 5);
+        // Return empty array - popular users feature disabled when using wallet-only sync
+        return [];
     }, []);
 
-    // Get recent recipients (last 5 users current user donated to)
+    // Get recent recipients (last 5 users current user donated to) - from wallet records
     const recentRecipients = useMemo(() => {
-        if (!publicKey) return [];
-        const sentKey = `donatu_sent_${publicKey}`;
-        const sentData = localStorage.getItem(sentKey);
-        if (!sentData) return [];
+        if (!publicKey || !sent || sent.length === 0) return [];
 
         try {
-            const donations = JSON.parse(sentData) as Array<{ recipient: string; timestamp: number }>;
             const uniqueRecipients = new Map<string, { address: string; lastDonation: number; name?: string }>();
 
-            donations.forEach(d => {
-                if (d.recipient && !uniqueRecipients.has(d.recipient)) {
-                    const profileKey = `donatu_profile_${d.recipient}`;
+            sent.forEach((donation) => {
+                if (donation.receiver && !uniqueRecipients.has(donation.receiver)) {
+                    const profileKey = `donatu_profile_${donation.receiver}`;
                     const profile = localStorage.getItem(profileKey);
                     const profileData = profile ? JSON.parse(profile) : {};
-                    uniqueRecipients.set(d.recipient, {
-                        address: d.recipient,
-                        lastDonation: d.timestamp,
+                    uniqueRecipients.set(donation.receiver, {
+                        address: donation.receiver,
+                        lastDonation: donation.timestamp,
                         name: profileData.name
                     });
                 }
@@ -91,7 +66,7 @@ export const Home = () => {
         } catch (e) {
             return [];
         }
-    }, [publicKey]);
+    }, [publicKey, sent]);
 
     const handleQuickDonate = async () => {
         if (!publicKey) {
@@ -223,30 +198,9 @@ export const Home = () => {
                 setSuccessTxId(txId);
                 setShowSuccess(true);
                 
-                // Save to history (use donation txId as main ID, but note transfer was done)
-                const historyKey = `donatu_sent_${publicKey}`;
-                const existing = JSON.parse(localStorage.getItem(historyKey) || "[]");
-                
-                // Check if transaction already exists (avoid duplicates)
-                const exists = existing.find((tx: any) => tx.txId === txId || tx.transferTxId === transferTxId);
-                if (!exists) {
-                    existing.unshift({
-                        txId: txId, // Donation transaction ID
-                        transferTxId: transferTxId, // Transfer transaction ID
-                        recipient,
-                        amount: amountNum,
-                        message: message || "",
-                        timestamp: Date.now(),
-                        status: "Success" // Mark as Success since both transactions were confirmed
-                    });
-                    localStorage.setItem(historyKey, JSON.stringify(existing));
-                    console.log("💾 Saved donation to sent history:", {
-                        transferTxId,
-                        donationTxId: txId,
-                        total: existing.length
-                    });
-                    
-                    // Note: Received donations are fetched from blockchain via wallet records
+                // Donation is saved in wallet records - no localStorage needed
+                // History will sync automatically from wallet in 5 seconds
+                console.log("✅ Donation sent! Will sync from wallet records automatically");
                     // No need to save to recipient's localStorage - they will sync from blockchain
                     
                     // Trigger refresh event (recipient will sync from blockchain)
