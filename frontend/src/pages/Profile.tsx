@@ -20,6 +20,7 @@ interface ProfileData {
     name: string;
     bio: string;
     address: string;
+    is_public?: boolean;  // If true, profile is visible in explore/search
 }
 
 export const Profile = () => {
@@ -34,6 +35,7 @@ export const Profile = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [name, setName] = useState("");
     const [bio, setBio] = useState("");
+    const [isPublic, setIsPublic] = useState(true); // Default: profile is public
     const [showDonate, setShowDonate] = useState(false);
     const [donateAmount, setDonateAmount] = useState("");
     const [donateMessage, setDonateMessage] = useState("");
@@ -54,6 +56,7 @@ export const Profile = () => {
                     setProfile({ ...data, address: displayAddress });
                     setName(data.name || "");
                     setBio(data.bio || "");
+                    setIsPublic(data.is_public !== undefined ? data.is_public : true);
                 } catch (e) {
                     console.warn("Failed to parse profile:", e);
                 }
@@ -113,8 +116,8 @@ export const Profile = () => {
 
                 // Save locally
                 const profileKey = `donatu_profile_${publicKey}`;
-                localStorage.setItem(profileKey, JSON.stringify({ name, bio }));
-                setProfile({ name, bio, address: publicKey });
+                localStorage.setItem(profileKey, JSON.stringify({ name, bio, is_public: isPublic }));
+                setProfile({ name, bio, address: publicKey, is_public: isPublic });
                 setIsEditing(false);
 
                 setTimeout(() => setStatus(""), 5000);
@@ -123,6 +126,65 @@ export const Profile = () => {
             const errorMsg = e instanceof Error ? e.message : String(e);
             logger.transaction.failed(errorMsg);
             logger.error("Profile", errorMsg);
+            setStatus("Error: " + errorMsg);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleToggleVisibility = async () => {
+        if (!publicKey || !adapter?.requestTransaction) {
+            alert("Please connect your wallet");
+            return;
+        }
+
+        if (!isOwnProfile) {
+            alert("Only profile owner can change visibility");
+            return;
+        }
+
+        setIsProcessing(true);
+        const newVisibility = !isPublic;
+        setStatus(`Setting profile ${newVisibility ? 'public' : 'private'}...`);
+
+        try {
+            const transaction = Transaction.createTransaction(
+                publicKey,
+                network,
+                PROGRAM_ID,
+                "set_profile_visibility",
+                [newVisibility ? "true" : "false"],
+                50000, // Minimal fee (0.05 ALEO)
+                false
+            );
+
+            setStatus("Please confirm the transaction in your wallet...");
+            const txId = await requestTransactionWithRetry(adapter, transaction, {
+                onRetry: (attempt) => {
+                    setStatus(`Waiting for wallet response... (Retry ${attempt}/${MAX_RETRIES})`);
+                }
+            });
+
+            if (txId) {
+                logger.transaction.confirmed(txId);
+                setIsPublic(newVisibility);
+                
+                // Update local storage
+                const profileKey = `donatu_profile_${publicKey}`;
+                const existing = localStorage.getItem(profileKey);
+                if (existing) {
+                    const data = JSON.parse(existing);
+                    data.is_public = newVisibility;
+                    localStorage.setItem(profileKey, JSON.stringify(data));
+                }
+                
+                setProfile(prev => prev ? { ...prev, is_public: newVisibility } : null);
+                setStatus(`Profile is now ${newVisibility ? 'public' : 'private'}!`);
+                setTimeout(() => setStatus(""), 5000);
+            }
+        } catch (e: unknown) {
+            const errorMsg = e instanceof Error ? e.message : String(e);
+            logger.transaction.failed(errorMsg);
             setStatus("Error: " + errorMsg);
         } finally {
             setIsProcessing(false);
@@ -256,9 +318,7 @@ export const Profile = () => {
 
                 // Donation is saved in wallet records - no localStorage needed
                 // History will sync automatically from wallet in 5 seconds
-                console.log("✅ Donation sent! Will sync from wallet records automatically"); else {
-                    console.log("⚠️ Transaction already in history:", txId);
-                }
+                console.log("✅ Donation sent! Will sync from wallet records automatically");
 
                 setDonateAmount("");
                 setDonateMessage("");
@@ -301,6 +361,22 @@ export const Profile = () => {
                     </div>
                     {profile?.bio && (
                         <p className="profile-bio">{profile.bio}</p>
+                    )}
+                    {isOwnProfile && (
+                        <div className="profile-visibility" style={{ marginTop: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
+                                <input
+                                    type="checkbox"
+                                    checked={isPublic}
+                                    onChange={handleToggleVisibility}
+                                    disabled={isProcessing}
+                                    style={{ width: "18px", height: "18px", cursor: "pointer" }}
+                                />
+                                <span style={{ fontSize: "0.9rem", color: "var(--text-secondary)" }}>
+                                    {isPublic ? "🌐 Public (visible in explore)" : "🔒 Private (hidden from explore)"}
+                                </span>
+                            </label>
+                        </div>
                     )}
                 </div>
                 {isOwnProfile && (

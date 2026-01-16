@@ -44,6 +44,12 @@ export const Search = () => {
                     const address = key.replace("donatu_profile_", "");
                     const profileData = JSON.parse(localStorage.getItem(key) || "{}");
                     
+                    // Only show public profiles in search (unless searching by exact address)
+                    const isPublic = profileData.is_public !== false; // Default to true if not set
+                    if (!isPublic && !searchQuery.startsWith("aleo1")) {
+                        continue; // Skip private profiles unless searching by address
+                    }
+                    
                     const nameMatch = profileData.name?.toLowerCase().includes(queryLower);
                     const addressMatch = address.toLowerCase().includes(queryLower);
                     

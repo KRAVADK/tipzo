@@ -9,6 +9,7 @@ program donatu_app_v5.aleo {
     struct ProfileInfo {
         name: field,
         bio: field,
+        is_public: bool,  // If true, profile is visible in explore/search
     }
 
     // Record for the recipient (Received Donation) - PRIVATE
@@ -79,7 +80,8 @@ program donatu_app_v5.aleo {
     async function finalize_create_profile(user: address, name: field, bio: field) {
         let info: ProfileInfo = ProfileInfo {
             name: name,
-            bio: bio
+            bio: bio,
+            is_public: true  // Default: profile is public (visible in explore)
         };
         Mapping::set(profiles, user, info);
     }
@@ -90,15 +92,41 @@ program donatu_app_v5.aleo {
     }
 
     async function finalize_update_profile(user: address, name: field, bio: field) {
+        // Preserve existing is_public setting
+        let existing: ProfileInfo = Mapping::get(profiles, user);
         let info: ProfileInfo = ProfileInfo {
             name: name,
-            bio: bio
+            bio: bio,
+            is_public: existing.is_public  // Keep existing visibility setting
         };
         Mapping::set(profiles, user, info);
     }
 
-    // View function to read profile from mapping (public, no transaction needed)
-    transition get_profile(public address: address) -> ProfileInfo {
-        return Mapping::get(profiles, address);
+    // Set profile visibility (public/private)
+    // User can control if their profile appears in explore/search
+    async transition set_profile_visibility(public is_public: bool) -> Future {
+        return finalize_set_profile_visibility(self.caller, is_public);
+    }
+
+    async function finalize_set_profile_visibility(user: address, is_public: bool) {
+        // Get existing profile to preserve name and bio
+        let existing: ProfileInfo = Mapping::get(profiles, user);
+        let info: ProfileInfo = ProfileInfo {
+            name: existing.name,
+            bio: existing.bio,
+            is_public: is_public
+        };
+        Mapping::set(profiles, user, info);
+    }
+
+    // View function to read profile from mapping (public, async for mapping access)
+    async transition get_profile(public user_address: address) -> Future {
+        return finalize_get_profile(user_address);
+    }
+
+    async function finalize_get_profile(user_address: address) {
+        let profile: ProfileInfo = Mapping::get(profiles, user_address);
+        // Note: In Leo, we can't directly return from finalize, but the profile is accessible
+        // The frontend will need to read it from the transaction output
     }
 }
