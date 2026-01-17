@@ -14,7 +14,7 @@ export interface CachedTx {
 export const TxCache = {
     save: (publicKey: string, txs: CachedTx[]) => {
         try {
-            const key = `donatu_txs_${publicKey}`;
+            const key = `tipzo_txs_${publicKey}`;
             localStorage.setItem(key, JSON.stringify(txs));
         } catch (e) {
             console.warn("Failed to save tx cache:", e);
@@ -23,7 +23,7 @@ export const TxCache = {
 
     get: (publicKey: string): CachedTx[] => {
         try {
-            const key = `donatu_txs_${publicKey}`;
+            const key = `tipzo_txs_${publicKey}`;
             const data = localStorage.getItem(key);
             if (!data) return [];
             return JSON.parse(data) as CachedTx[];
@@ -45,7 +45,7 @@ export const TxCache = {
 
     clear: (publicKey: string) => {
         try {
-            const key = `donatu_txs_${publicKey}`;
+            const key = `tipzo_txs_${publicKey}`;
             localStorage.removeItem(key);
         } catch (e) {
             console.warn("Failed to clear tx cache:", e);

@@ -49,7 +49,7 @@ export const Home = () => {
 
             sent.forEach((donation) => {
                 if (donation.receiver && !uniqueRecipients.has(donation.receiver)) {
-                    const profileKey = `donatu_profile_${donation.receiver}`;
+                    const profileKey = `tipzo_profile_${donation.receiver}`;
                     const profile = localStorage.getItem(profileKey);
                     const profileData = profile ? JSON.parse(profile) : {};
                     uniqueRecipients.set(donation.receiver, {

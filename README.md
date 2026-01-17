@@ -1,27 +1,53 @@
-# Donatu - Aleo Donations App
+# TipZo - Private Donations on Aleo
 
-Повнофункціональний застосунок для приватних донатів на блокчейні Aleo (testnet) з використанням смарт-контрактів Leo.
+A fully-featured decentralized application for private donations on the Aleo blockchain (testnet) using Leo smart contracts. TipZo leverages zero-knowledge proofs to ensure complete privacy for all donation transactions.
 
-## Особливості
+## Features
 
-- 🔒 **Повністю зашифровані донати** - використовує zero-knowledge proofs Aleo
-- 👤 **Система профілів** - створення та оновлення профілів з нікнеймом та біо
-- 🔍 **Пошук користувачів** - пошук за адресою або нікнеймом
-- 💰 **Донати** - через профіль або швидкий донат
-- 📜 **Історія транзакцій** - перегляд надісланих та отриманих донатів
-- 🎨 **Сучасний дизайн** - у стилі Iron Fish з темною темою та градієнтами
+- 🔒 **Fully Encrypted Donations** - Uses Aleo's zero-knowledge proofs for complete privacy
+- 👤 **Profile System** - Create and update profiles with nickname and bio
+- 🔍 **User Search** - Search users by address or nickname
+- 💰 **Donations** - Send donations through profiles or quick donation popup
+- 📜 **Transaction History** - View sent and received donations
+- 🎨 **Modern Design** - Dark theme with glassmorphism effects and gradients
 
-## Технології
+## How It Works
 
-- **Frontend**: React + TypeScript + Vite
-- **Blockchain**: Aleo (testnet)
-- **Smart Contracts**: Leo
-- **Wallet**: Leo Wallet integration
-- **Styling**: CSS з glassmorphism ефектами
+TipZo is built on Aleo's privacy-first blockchain architecture:
 
-## Встановлення
+1. **Private Records**: All donation data (amount, message, sender/recipient) is stored in encrypted private records that only the owner can decrypt
+2. **Zero-Knowledge Proofs**: Transactions are verified without revealing sensitive information
+3. **Public Profiles**: Only profile information (nickname, bio) is stored publicly for discoverability
+4. **Wallet Integration**: Seamless integration with Leo Wallet and Puzzle Wallet for transaction signing
 
-### Frontend
+### Smart Contract Architecture
+
+The Leo smart contract (`src/main.leo`) implements:
+
+- **Profile Management**: Public mapping for user profiles (name, bio)
+- **Private Donations**: Two private records created per donation:
+  - `RecipientDonation`: Owned by recipient, contains sender address, amount, message
+  - `SentDonation`: Owned by sender, contains recipient address, amount, message
+- **No Public Mappings**: Donation data is never stored in public mappings, ensuring complete privacy
+
+## Technologies
+
+- **Frontend**: React 18 + TypeScript + Vite
+- **Blockchain**: Aleo Testnet
+- **Smart Contracts**: Leo programming language
+- **Wallet Integration**: Leo Wallet & Puzzle Wallet adapters
+- **Styling**: CSS with glassmorphism effects
+- **Routing**: React Router
+
+## Installation
+
+### Prerequisites
+
+- Node.js 18+ and npm
+- Leo CLI ([Installation Guide](https://developer.aleo.org/getting_started/installation))
+- Leo Wallet browser extension
+
+### Frontend Setup
 
 ```bash
 cd frontend
@@ -29,88 +55,94 @@ npm install
 npm run dev
 ```
 
-### Leo Smart Contract
+The application will be available at `http://localhost:5173`
+
+### Smart Contract Setup
 
 ```bash
-# Встановіть Leo CLI
-# https://developer.aleo.org/getting_started/installation
-
-# Компіляція контракту
+# Compile the contract
 leo build
 
-# Деплой на testnet
+# Deploy to testnet
 leo deploy
 ```
 
-## Структура проекту
+After deployment, update `frontend/src/deployed_program.ts` with your program ID:
+
+```typescript
+export const PROGRAM_ID = "tipzo_app_v5.aleo";
+```
+
+## Project Structure
 
 ```
-donatu/
+tipzo/
 ├── src/
-│   └── main.leo          # Leo smart contract
+│   └── main.leo              # Leo smart contract
 ├── frontend/
 │   ├── src/
-│   │   ├── components/   # React компоненти
-│   │   ├── pages/        # Сторінки застосунку
-│   │   ├── utils/        # Утиліти
-│   │   └── App.tsx       # Головний компонент
+│   │   ├── components/        # React components (Header, Toast, etc.)
+│   │   ├── pages/            # Application pages (Home, Profile, Search, History)
+│   │   ├── hooks/            # Custom React hooks
+│   │   ├── utils/            # Utilities (Aleo helpers, wallet utils)
+│   │   └── App.tsx           # Main application component
 │   └── package.json
+├── build/                     # Compiled Leo program
+├── deploy_output/            # Deployment artifacts
 └── README.md
 ```
 
-## Функціонал
+## Usage
 
-### 1. Підключення Leo Wallet
-- Підключення через Leo Wallet extension
-- Відображення адреси та балансу
-- Автоматичне відновлення підключення
+1. **Connect Wallet**: Install Leo Wallet extension and connect your wallet
+2. **Create Profile** (optional): Set up your profile with a nickname and bio
+3. **Find Users**: Search for users by address or nickname
+4. **Send Donation**: Navigate to a user's profile or use the quick donation feature
+5. **View History**: Check your transaction history for sent and received donations
 
-### 2. Система профілів
-- Створення профілю з нікнеймом та описом
-- Оновлення профілю
-- Зберігання в смарт-контракті
+## Development
 
-### 3. Пошук користувачів
-- Пошук за адресою Aleo
-- Пошук за нікнеймом
-- Відображення результатів у вигляді списку
+### Smart Contract Functions
 
-### 4. Донати
-- **Через профіль**: перехід у профіль та донат
-- **Швидкий донат**: спливаюче вікно для швидкого донату
-- Всі донати зашифровані через Aleo
+- `create_profile(name, bio)` - Create or update user profile
+- `update_profile(name, bio)` - Update existing profile
+- `send_donation(recipient, amount, message, timestamp)` - Send private donation
+- `get_profile(user_address)` - Retrieve user profile
 
-### 5. Історія транзакцій
-- Надіслані донати
-- Отримані донати
-- Посилання на AleoScan та Provable Explorer
+### Frontend Components
 
-## Використання
+- `Header` - Navigation and wallet connection
+- `Home` - Main page with quick donation feature
+- `Profile` - User profile page with donation functionality
+- `Search` - User search interface
+- `History` - Transaction history viewer
 
-1. Підключіть Leo Wallet
-2. Створіть профіль (опціонально)
-3. Знайдіть користувача через пошук або перейдіть на його профіль
-4. Відправте донат
-5. Перегляньте історію транзакцій
+### Key Utilities
 
-## Розробка
+- `aleo.ts` - Aleo data conversion utilities
+- `walletUtils.ts` - Wallet interaction helpers
+- `walletRecords.ts` - Record fetching and parsing
+- `txCache.ts` - Transaction caching
 
-### Leo Smart Contract
+## Deployment
 
-Контракт містить:
-- `create_profile` - створення/оновлення профілю
-- `send_donation` - відправка зашифрованого донату
+See `DEPLOY_INSTRUCTIONS.md` for detailed deployment instructions.
 
-### Frontend
+The contract is currently deployed on Aleo Testnet:
+- **Program ID**: `tipzo_app_v5.aleo`
+- **Network**: Testnet
+- **Explorers**: 
+  - [AleoScan](https://testnet.aleoscan.io/)
+  - [Provable Explorer](https://testnet.explorer.provable.com/)
 
-Основні компоненти:
-- `Header` - навігація та підключення гаманця
-- `Home` - головна сторінка з швидким донатом
-- `Profile` - сторінка профілю
-- `Search` - пошук користувачів
-- `History` - історія транзакцій
+## Privacy & Security
 
-## Ліцензія
+- All donation amounts and messages are encrypted in private records
+- Only the sender and recipient can decrypt their respective records
+- Profile information (nickname, bio) is public for discoverability
+- No donation data is stored in public blockchain state
+- Zero-knowledge proofs ensure transaction validity without revealing details
+
+## License
 
 MIT
-

@@ -1,4 +1,4 @@
-program donatu_app_v5.aleo {
+program tipzo_app_v5.aleo {
     // This is the constructor for the program.
     // It is called when the program is deployed.
     // Version 5: Fully private donations - no public mappings

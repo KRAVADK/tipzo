@@ -89,10 +89,10 @@ function App() {
     const wallets = useMemo(
         () => [
             new LeoWalletAdapter({
-                appName: "Donatu - Aleo Donations",
+                appName: "TipZo - Aleo Donations",
             }),
             new PuzzleWalletAdapter({
-                appName: "Donatu - Aleo Donations",
+                appName: "TipZo - Aleo Donations",
                 programIdPermissions: {
                     [WalletAdapterNetwork.TestnetBeta]: [PROGRAM_ID],
                     [WalletAdapterNetwork.MainnetBeta]: [PROGRAM_ID]
