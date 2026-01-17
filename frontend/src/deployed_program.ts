@@ -7,5 +7,5 @@
 // View on: https://testnet.explorer.provable.com/transaction/at1vnnl4uw65w3t053790v5d3qn5lzmnta2ynxe2zdznrmu07gngyxqc62f0g
 // Version 5: Fully private donations - no public mappings, all data in private records only
 
-export const PROGRAM_ID = "donatu_app_v5.aleo";
+export const PROGRAM_ID = "tipzo_app_v5.aleo";
 

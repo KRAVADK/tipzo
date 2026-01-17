@@ -48,7 +48,7 @@ export const Profile = () => {
         if (displayAddress) {
             setIsOwnProfile(displayAddress === publicKey);
             // Load profile from localStorage (in real app, fetch from blockchain)
-            const profileKey = `donatu_profile_${displayAddress}`;
+            const profileKey = `tipzo_profile_${displayAddress}`;
             const saved = localStorage.getItem(profileKey);
             if (saved) {
                 try {
@@ -82,7 +82,7 @@ export const Profile = () => {
         try {
             // Save profile ONLY in localStorage (not in blockchain)
             // This keeps profiles private and optional - no global index
-            const profileKey = `donatu_profile_${publicKey}`;
+            const profileKey = `tipzo_profile_${publicKey}`;
             localStorage.setItem(profileKey, JSON.stringify({ 
                 name, 
                 bio, 
@@ -113,7 +113,7 @@ export const Profile = () => {
         setIsPublic(newVisibility);
         
         // Update local storage (no blockchain transaction needed - this is UI preference)
-        const profileKey = `donatu_profile_${publicKey}`;
+        const profileKey = `tipzo_profile_${publicKey}`;
         const existing = localStorage.getItem(profileKey);
         if (existing) {
             const data = JSON.parse(existing);

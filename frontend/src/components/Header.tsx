@@ -29,7 +29,7 @@ export const Header: FC<HeaderProps> = ({ programId }) => {
 
     // Check if first time connecting
     useEffect(() => {
-        const hasSeenInstructions = localStorage.getItem("donatu_seen_wallet_instructions");
+        const hasSeenInstructions = localStorage.getItem("tipzo_seen_wallet_instructions");
         if (!hasSeenInstructions && !publicKey) {
             // Don't show automatically, only when user clicks connect
         }
@@ -71,7 +71,7 @@ export const Header: FC<HeaderProps> = ({ programId }) => {
             select(adapterName as WalletName);
             setShowModal(false);
             setShowInstructions(false);
-            localStorage.setItem("donatu_seen_wallet_instructions", "true");
+            localStorage.setItem("tipzo_seen_wallet_instructions", "true");
         } catch (e) {
             logger.error("Wallet Connection", e instanceof Error ? e.message : String(e));
             const errorMsg = e instanceof Error ? e.message : String(e);
@@ -100,7 +100,7 @@ export const Header: FC<HeaderProps> = ({ programId }) => {
                 <div className="header-container">
                     <Link to="/" className="logo">
                         <div className="logo-icon"></div>
-                        <span className="logo-text">DON<span className="logo-highlight">ATU</span></span>
+                        <span className="logo-text">TIP<span className="logo-highlight">ZO</span></span>
                     </Link>
 
                     <nav className="nav">

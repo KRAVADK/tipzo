@@ -25,7 +25,7 @@ export const useWalletRecords = () => {
         
         setIsLoading(true);
         try {
-            // Спроба отримати records через requestRecordPlaintexts (потребує OnChainHistory)
+            // Attempt to fetch records via requestRecordPlaintexts (requires OnChainHistory permission)
             let records: Array<{ id?: string; plaintext: string }> = [];
             
             if (adapter.requestRecordPlaintexts) {
@@ -45,7 +45,7 @@ export const useWalletRecords = () => {
                 }
             }
             
-            // Fallback: спроба через requestRecords (encrypted) with retry
+            // Fallback: attempt via requestRecords (encrypted) with retry
             if (records.length === 0 && adapter.requestRecords) {
                 try {
                     console.log("[DonationRecords] 🔓 Fetching encrypted records...");
@@ -53,7 +53,7 @@ export const useWalletRecords = () => {
                     
                     if (encryptedRecords && encryptedRecords.length > 0) {
                         console.log(`✅ [DonationRecords] Fetched ${encryptedRecords.length} encrypted records via requestRecords`);
-                        // Якщо є decrypt метод, спробуємо розшифрувати
+                        // If decrypt method exists, attempt to decrypt
                         if (adapter.decrypt) {
                             const decryptedRecords: Array<{ id?: string; plaintext: string }> = [];
                             for (const record of encryptedRecords) {
@@ -97,7 +97,7 @@ export const useWalletRecords = () => {
                 return [];
             }
             
-            // Парсинг records
+            // Parse records
             const parsedRecords: RecordDonation[] = records
                 .map(record => parseDonationRecord(record.plaintext || String(record)))
                 .filter(Boolean) as RecordDonation[];
@@ -117,7 +117,7 @@ export const useWalletRecords = () => {
     return { fetchRecords, hasPermission, isLoading };
 };
 
-// Helper для парсингу Leo record у TypeScript об'єкт
+// Helper function to parse Leo record into TypeScript object
 // New structure:
 // - RecipientDonation: owner (recipient), sender, amount, message, timestamp
 // - SentDonation: owner (sender), recipient, amount, message, timestamp

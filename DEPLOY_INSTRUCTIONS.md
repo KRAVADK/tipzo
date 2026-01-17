@@ -1,25 +1,25 @@
-# Інструкції для деплою контракту
+# Deployment Instructions
 
-## Компіляція ✅
-Контракт вже скомпільовано успішно!
+## Compilation ✅
+The contract has been successfully compiled!
 
-## Деплой
+## Deployment
 
-Оскільки `leo deploy` потребує інтерактивного підтвердження, виконайте одну з наступних команд вручну:
+Since `leo deploy` requires interactive confirmation, execute one of the following commands manually:
 
-### Варіант 1: Leo CLI (рекомендовано)
+### Option 1: Leo CLI (Recommended)
 ```bash
 cd C:\Users\Leonid\Documents\trae_projects\donatu
 leo deploy --private-key APrivateKey1zkp3CAcpd4QNiUhznYhou5A2wjiBgvfrbTR3i81XzZVqewa --network testnet --endpoint https://api.explorer.provable.com/v1 --broadcast
 ```
 
-### Варіант 2: Через PowerShell скрипт
+### Option 2: Via PowerShell Script
 ```powershell
 cd C:\Users\Leonid\Documents\trae_projects\donatu
 .\deploy.ps1
 ```
 
-### Варіант 3: Через змінні середовища
+### Option 3: Via Environment Variables
 ```powershell
 $env:LEO_PRIVATE_KEY="APrivateKey1zkp3CAcpd4QNiUhznYhou5A2wjiBgvfrbTR3i81XzZVqewa"
 $env:NETWORK="testnet"
@@ -27,21 +27,20 @@ $env:ENDPOINT="https://api.explorer.provable.com/v1"
 leo deploy --broadcast
 ```
 
-## Після деплою
+## After Deployment
 
-1. Скопіюйте Program ID з виводу команди (буде виглядати як `donatu_app.aleo`)
-2. Оновіть `frontend/src/deployed_program.ts`:
+1. Copy the Program ID from the command output (will look like `tipzo_app_v5.aleo`)
+2. Update `frontend/src/deployed_program.ts`:
    ```typescript
-   export const PROGRAM_ID = "donatu_app.aleo"; // або повний ID з деплою
+   export const PROGRAM_ID = "tipzo_app_v5.aleo"; // or full ID from deployment
    ```
 
-## Перевірка деплою
+## Verify Deployment
 
-Після успішного деплою перевірте транзакцію на:
+After successful deployment, verify the transaction on:
 - https://testnet.aleoscan.io/
 - https://testnet.explorer.provable.com/
 
-## Програмний ID
+## Program ID
 
-Після деплою Program ID буде: `donatu_app.aleo` (або з додатковим суфіксом залежно від мережі)
-
+After deployment, the Program ID will be: `tipzo_app_v5.aleo` (or with additional suffix depending on network)

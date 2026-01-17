@@ -35,13 +35,13 @@ export const Search = () => {
         try {
             // Search in localStorage (profiles are cached there after creation/update)
             const allKeys = Object.keys(localStorage);
-            const profileKeys = allKeys.filter(key => key.startsWith("donatu_profile_"));
+            const profileKeys = allKeys.filter(key => key.startsWith("tipzo_profile_"));
             
             const queryLower = searchQuery.toLowerCase();
 
             for (const key of profileKeys) {
                 try {
-                    const address = key.replace("donatu_profile_", "");
+                    const address = key.replace("tipzo_profile_", "");
                     const profileData = JSON.parse(localStorage.getItem(key) || "{}");
                     
                     // Only show public profiles in search (unless searching by exact address)
@@ -70,7 +70,7 @@ export const Search = () => {
                 const existing = found.find(r => r.address === searchQuery);
                 if (!existing) {
                     // Try to load from localStorage first
-                    const profileKey = `donatu_profile_${searchQuery}`;
+                    const profileKey = `tipzo_profile_${searchQuery}`;
                     const profileData = localStorage.getItem(profileKey);
                     
                     if (profileData) {

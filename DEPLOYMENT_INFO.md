@@ -1,10 +1,10 @@
 # Deployment Information
 
-## ✅ Деплой успішно завершено!
+## ✅ Deployment Successfully Completed!
 
 ### Program ID
 ```
-donatu_app.aleo
+tipzo_app.aleo
 ```
 
 ### Transaction Details
@@ -52,12 +52,12 @@ https://testnet.explorer.provable.com/transaction/at15etvrl08fu5c96xdywrmncjlh08
 
 ### Program Functions
 
-1. **create_profile** - Створення профілю
-2. **update_profile** - Оновлення профілю
-3. **send_donation** - Відправка донату
+1. **create_profile** - Create profile
+2. **update_profile** - Update profile
+3. **send_donation** - Send donation
 
 ### Deployment File
-Deployment details saved to: `deploy_output/donatu_app.aleo.deployment.json`
+Deployment details saved to: `deploy_output/tipzo_app.aleo.deployment.json`
 
 ### Status
 ✅ Transaction accepted and confirmed!
