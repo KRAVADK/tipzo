@@ -201,21 +201,20 @@ export const Home = () => {
                 // Donation is saved in wallet records - no localStorage needed
                 // History will sync automatically from wallet in 5 seconds
                 console.log("✅ Donation sent! Will sync from wallet records automatically");
-                    // No need to save to recipient's localStorage - they will sync from blockchain
-                    
-                    // Trigger refresh event (recipient will sync from blockchain)
-                    window.dispatchEvent(new CustomEvent('donation-sent', { detail: { txId, transferTxId } }));
-                } else {
-                    console.log("⚠️ Transaction already in history:", txId);
-                }
-
-                // Reset form
-                setRecipient("");
-                setAmount("");
-                setMessage("");
-                setShowQuickDonate(false);
-                setStatus("");
+                // No need to save to recipient's localStorage - they will sync from blockchain
+                
+                // Trigger refresh event (recipient will sync from blockchain)
+                window.dispatchEvent(new CustomEvent('donation-sent', { detail: { txId, transferTxId } }));
+            } else {
+                console.log("⚠️ Transaction already in history:", txId);
             }
+
+            // Reset form
+            setRecipient("");
+            setAmount("");
+            setMessage("");
+            setShowQuickDonate(false);
+            setStatus("");
         } catch (e: unknown) {
             const errorMsg = e instanceof Error ? e.message : String(e);
             logger.transaction.failed(errorMsg);
