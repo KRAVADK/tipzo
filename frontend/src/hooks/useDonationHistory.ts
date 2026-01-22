@@ -157,7 +157,7 @@ export function useDonationHistory(userAddress: string | null) {
     }, [userAddress, fetchRecords, fetchHistory]);
 
     // Optimistic update function - just refresh from wallet
-    const addOptimisticDonation = useCallback((donation: DonationTransaction) => {
+    const addOptimisticDonation = useCallback(() => {
         // Trigger refresh from wallet after a short delay
         setTimeout(() => {
             fetchHistory();

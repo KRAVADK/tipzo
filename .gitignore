@@ -21,3 +21,6 @@ Thumbs.db
 deploy_output/
 
 
+
+# Local Netlify folder
+.netlify

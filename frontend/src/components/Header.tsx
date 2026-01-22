@@ -20,7 +20,7 @@ const WalletIcon = () => (
 );
 
 export const Header: FC<HeaderProps> = ({ programId }) => {
-    const { publicKey, disconnect, connecting, select, wallets, requestRecords, connect, wallet } = useWallet();
+    const { publicKey, disconnect, connecting, select, wallets, wallet } = useWallet();
     const [showModal, setShowModal] = useState(false);
     const [showInstructions, setShowInstructions] = useState(false);
     const [walletAddress, setWalletAddress] = useState<string | null>(null);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork, Transaction } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from "../deployed_program";
@@ -8,7 +8,6 @@ import { logger } from "../utils/logger";
 import { requestTransactionWithRetry } from "../utils/walletUtils";
 
 const MAX_RETRIES = 3;
-import { SuccessModal } from "../components/SuccessModal";
 import "./Profile.css";
 
 type WalletAdapterExtras = {
@@ -28,7 +27,6 @@ export const Profile = () => {
     const { publicKey, wallet } = useWallet();
     const adapter = wallet?.adapter as unknown as WalletAdapterExtras | undefined;
     const network = WalletAdapterNetwork.TestnetBeta;
-    const navigate = useNavigate();
 
     const [profile, setProfile] = useState<ProfileData | null>(null);
     const [isOwnProfile, setIsOwnProfile] = useState(false);

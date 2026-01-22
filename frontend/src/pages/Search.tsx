@@ -1,10 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
-import { WalletAdapterNetwork, Transaction } from "@demox-labs/aleo-wallet-adapter-base";
-import { PROGRAM_ID } from "../deployed_program";
-import { formatAddress, fieldToString } from "../utils/aleo";
-import { requestTransactionWithRetry } from "../utils/walletUtils";
+import { formatAddress } from "../utils/aleo";
 import "./Search.css";
 
 interface SearchResult {
@@ -18,9 +14,6 @@ export const Search = () => {
     const [results, setResults] = useState<SearchResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const navigate = useNavigate();
-    const { publicKey, wallet } = useWallet();
-    const adapter = wallet?.adapter as any;
-    const network = WalletAdapterNetwork.TestnetBeta;
 
     // Search profiles - uses localStorage for name search, blockchain for address lookup
     const searchProfiles = async (searchQuery: string) => {

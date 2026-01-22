@@ -120,7 +120,7 @@ export async function getTransaction(txId: string): Promise<TransactionDetails |
 
 // 3. Get program transitions (function calls)
 // NOTE: This endpoint returns 400 Bad Request, API may not support it
-export async function getProgramTransitions(programId: string): Promise<Transition[]> {
+export async function getProgramTransitions(): Promise<Transition[]> {
     // API endpoint doesn't work, return empty array
     console.warn('[ExplorerAPI] getProgramTransitions endpoint not available (returns 400)');
     return [];

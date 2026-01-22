@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { useDonationHistory } from "../hooks/useDonationHistory";
-import { formatAddress, getProvableUrl } from "../utils/aleo";
+import { getProvableUrl } from "../utils/aleo";
 import { DonationTransaction } from "../utils/explorerAPI";
 import { ExternalLink, Send, Inbox, AlertCircle, Clock, CheckCircle, XCircle } from "lucide-react";
 import "./History.css";
@@ -58,8 +58,6 @@ function DonationTable({
     donations: DonationTransaction[];
     type: "sent" | "received";
 }) {
-    const navigate = useNavigate();
-
     return (
         <div className="donations-table-container glass">
             <table className="donations-table">
