@@ -21,10 +21,11 @@ import { useParallax } from "./hooks/useParallax";
 import "./App.css";
 
 const AppContent = () => {
-    const { publicKey, connect, wallet } = useWallet();
+    const { publicKey, wallet, select, wallets } = useWallet();
     const { toast, setToast } = useWalletErrors();
     useWalletEvents();
     const parallaxRef = useParallax(0.3);
+    const network = WalletAdapterNetwork.TestnetBeta;
 
     // Auto-reconnect on mount
     useEffect(() => {
@@ -32,22 +33,20 @@ const AppContent = () => {
         const savedAddress = localStorage.getItem("wallet_address");
         const savedAdapter = localStorage.getItem("wallet_adapter");
         
-        if (wasConnected === "true" && savedAddress && !publicKey && wallet) {
+        if (wasConnected === "true" && savedAddress && !publicKey && wallet && savedAdapter) {
             // Try to reconnect after a short delay to ensure wallet is ready
             const attemptReconnect = async () => {
                 try {
                     // Wait a bit for wallet to be ready
                     await new Promise(resolve => setTimeout(resolve, 500));
                     
-                    // If we have a saved adapter name, try to select it first
-                    if (savedAdapter && wallet) {
-                        // The wallet adapter should already be selected, just connect
-                        await connect();
-                    } else {
-                        await connect();
+                    // Find and select the saved adapter
+                    const adapter = wallets.find(w => w.adapter.name === savedAdapter)?.adapter;
+                    if (adapter) {
+                        await adapter.connect(DecryptPermission.OnChainHistory, network, [PROGRAM_ID]);
+                        select(savedAdapter as any);
+                        console.log("✅ Auto-reconnected wallet:", savedAddress);
                     }
-                    
-                    console.log("✅ Auto-reconnected wallet:", savedAddress);
                 } catch (e) {
                     console.warn("⚠️ Auto-reconnect failed:", e);
                     // Don't remove on fail - might be temporary issue
@@ -56,7 +55,7 @@ const AppContent = () => {
             };
             attemptReconnect();
         }
-    }, [connect, publicKey, wallet]);
+    }, [publicKey, wallet, select, wallets]);
 
     return (
         <Router>

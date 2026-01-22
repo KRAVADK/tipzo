@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork, Transaction } from "@demox-labs/aleo-wallet-adapter-base";
@@ -33,12 +33,7 @@ export const Home = () => {
     const [showSuccess, setShowSuccess] = useState(false);
     const [successTxId, setSuccessTxId] = useState<string | undefined>();
 
-    // Get popular users - removed (no localStorage, only wallet sync)
-    // Popular users would require aggregating data from blockchain which is not efficient
-    const popularUsers = useMemo(() => {
-        // Return empty array - popular users feature disabled when using wallet-only sync
-        return [];
-    }, []);
+    // Popular users feature disabled when using wallet-only sync
 
     // Get recent recipients (last 5 users current user donated to) - from wallet records
     const recentRecipients = useMemo(() => {
@@ -54,7 +49,7 @@ export const Home = () => {
                     const profileData = profile ? JSON.parse(profile) : {};
                     uniqueRecipients.set(donation.receiver, {
                         address: donation.receiver,
-                        lastDonation: donation.timestamp,
+                        lastDonation: donation.timestamp || 0,
                         name: profileData.name
                     });
                 }

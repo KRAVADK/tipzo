@@ -108,7 +108,7 @@ export const getProvableUrl = (txId: string, network: string = "testnet"): strin
 
 // Get balance from AleoScan (API not available, return null)
 // Note: AleoScan doesn't provide public API, balance must come from wallet
-export const getBalanceFromAleoScan = async (address: string, network: string = "testnet"): Promise<string | null> => {
+export const getBalanceFromAleoScan = async (_address: string, _network: string = "testnet"): Promise<string | null> => {
     // AleoScan doesn't have public API for balance
     // Balance should come from wallet adapter
     return null;
@@ -116,7 +116,7 @@ export const getBalanceFromAleoScan = async (address: string, network: string = 
 
 // Get balance from Provable (API not available, return null)
 // Note: Provable doesn't provide public API, balance must come from wallet
-export const getBalanceFromProvable = async (address: string, network: string = "testnet"): Promise<string | null> => {
+export const getBalanceFromProvable = async (_address: string, _network: string = "testnet"): Promise<string | null> => {
     // Provable doesn't have public API for balance
     // Balance should come from wallet adapter
     return null;
