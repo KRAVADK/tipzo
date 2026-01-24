@@ -43,4 +43,3 @@ export const logger = {
     },
     error: (operation: string, error: string) => log("error", "⚠️", "Error", `${operation}: ${error}`),
 };
-

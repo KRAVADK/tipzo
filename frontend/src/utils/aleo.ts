@@ -3,15 +3,36 @@
 export const stringToField = (str: string): string => {
     try {
         if (!str) return "0field";
+        // Ensure str is a string and not null/undefined
+        const safeStr = String(str);
+        if (safeStr === "undefined" || safeStr === "null" || safeStr === "NaN") {
+            console.warn("Invalid string input to stringToField:", safeStr);
+            return "0field";
+        }
+        
         const encoder = new TextEncoder();
-        const encoded = encoder.encode(str);
+        const encoded = encoder.encode(safeStr);
         let val = BigInt(0);
         for (let i = 0; i < Math.min(encoded.length, 31); i++) {
-            val = (val << BigInt(8)) | BigInt(encoded[i]);
+            const byte = encoded[i];
+            // Validate byte is a valid number (not NaN)
+            if (isNaN(byte) || byte < 0 || byte > 255) {
+                console.warn(`Invalid byte at index ${i}: ${byte}, skipping`);
+                continue;
+            }
+            val = (val << BigInt(8)) | BigInt(byte);
         }
-        return val.toString() + "field";
+        
+        const result = val.toString() + "field";
+        // Final validation - ensure result doesn't contain NaN
+        if (result.includes("NaN") || isNaN(Number(val.toString()))) {
+            console.error("stringToField produced invalid result:", result, "from input:", str);
+            return "0field";
+        }
+        
+        return result;
     } catch (e) {
-        console.error("Error encoding string to field:", e);
+        console.error("Error encoding string to field:", e, "Input was:", str);
         return "0field";
     }
 };
@@ -105,37 +126,3 @@ export const getProvableUrl = (txId: string, network: string = "testnet"): strin
     // Provable format: /transaction/{txId}
     return `https://${network}.explorer.provable.com/transaction/${txId}`;
 };
-
-// Get balance from AleoScan (API not available, return null)
-// Note: AleoScan doesn't provide public API, balance must come from wallet
-export const getBalanceFromAleoScan = async (_address: string, _network: string = "testnet"): Promise<string | null> => {
-    // AleoScan doesn't have public API for balance
-    // Balance should come from wallet adapter
-    return null;
-};
-
-// Get balance from Provable (API not available, return null)
-// Note: Provable doesn't provide public API, balance must come from wallet
-export const getBalanceFromProvable = async (_address: string, _network: string = "testnet"): Promise<string | null> => {
-    // Provable doesn't have public API for balance
-    // Balance should come from wallet adapter
-    return null;
-};
-
-// Get balance from any available source
-export const getBalanceFromExplorers = async (address: string, network: string = "testnet"): Promise<string | null> => {
-    // Try Provable first (usually more reliable)
-    let balance = await getBalanceFromProvable(address, network);
-    if (balance) {
-        return balance;
-    }
-    
-    // Fallback to AleoScan
-    balance = await getBalanceFromAleoScan(address, network);
-    if (balance) {
-        return balance;
-    }
-    
-    return null;
-};
-

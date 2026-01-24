@@ -24,3 +24,6 @@ deploy_output/
 
 # Local Netlify folder
 .netlify
+
+# Backup
+frontend/src_backup/

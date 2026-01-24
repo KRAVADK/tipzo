@@ -59,7 +59,7 @@ export async function withWalletTimeout<T>(
             }
 
             // Don't retry on invalid parameters
-            if (errorMsg.includes("INVALID_PARAMS")) {
+            if (errorMsg.includes("INVALID_PARAMS") || errorMsg.includes("Some of the parameters you provided are invalid")) {
                 console.log("[Wallet] ❌ Invalid parameters, not retrying");
                 throw error;
             }
@@ -152,4 +152,3 @@ export async function decryptWithRetry(
         options
     );
 }
-

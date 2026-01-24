@@ -10,7 +10,8 @@ leo deploy `
   --private-key $PRIVATE_KEY `
   --network $NETWORK `
   --endpoint $ENDPOINT `
-  --broadcast
+  --broadcast `
+  --yes
 
 Write-Host "✅ Deployment complete!" -ForegroundColor Green
 
