@@ -1,9 +1,8 @@
 // Explorer API integration for Provable Explorer
 // API Base URL: https://api.explorer.provable.com/v1/testnet
-// Documentation: https://docs.explorer.provable.com/docs/api-reference/5nzkj6j12ol1p-introduction
 
-const API_BASE_URL = "https://api.explorer.provable.com/v1/testnet";
-const EXPLORER_URL = "https://testnet.explorer.provable.com";
+import { PROGRAM_ID } from "../deployed_program";
+import { fieldToString } from "./aleo";
 
 export interface Transaction {
     id: string;
@@ -14,32 +13,7 @@ export interface Transaction {
     timestamp?: number;
     status?: 'pending' | 'confirmed' | 'failed';
     block_height?: number;
-    transitions?: Transition[];
-}
-
-export interface Transition {
-    id: string;
-    program: string;
-    function: string;
-    inputs: TransitionInput[];
-    outputs: TransitionOutput[];
-    tpk?: string;
-    tcm?: string;
-}
-
-export interface TransitionInput {
-    type: string;
-    value: string;
-}
-
-export interface TransitionOutput {
-    type: string;
-    value: string;
-}
-
-export interface TransactionDetails extends Transaction {
-    fee?: number;
-    execution?: any;
+    transitions?: any[];
 }
 
 export interface DonationTransaction extends Transaction {
@@ -50,233 +24,97 @@ export interface DonationTransaction extends Transaction {
     explorerUrl: string;
 }
 
-// Helper function to handle API errors
-async function fetchAPI<T>(endpoint: string): Promise<T> {
+export interface UserProfile {
+    name: string;
+    bio: string;
+}
+
+const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
+
+export const getProfileFromChain = async (address: string): Promise<UserProfile | null> => {
     try {
-        const url = `${API_BASE_URL}${endpoint}`;
-        console.log('[ExplorerAPI] Fetching:', url);
+        const url = `${MAPPING_URL}/${PROGRAM_ID}/mapping/profiles/${address}`;
+        console.log(`Fetching profile from: ${url}`);
         
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-            },
-        });
-
-        if (response.status === 429) {
-            throw new Error('Rate limit exceeded. Please wait a moment.');
-        }
-
+        const response = await fetch(url);
         if (!response.ok) {
-            throw new Error(`API error: ${response.statusText} (${response.status})`);
-        }
-
-        const data = await response.json();
-        console.log('[ExplorerAPI] Response:', data);
-        return data as T;
-    } catch (error: any) {
-        if (error.name === 'AbortError') {
-            throw new Error('Request timeout');
-        }
-        console.error('[ExplorerAPI] Error:', error);
-        throw error;
-    }
-}
-
-// 1. Get all transactions for an address
-export async function getAddressTransactions(address: string): Promise<Transaction[]> {
-    try {
-        const data = await fetchAPI<{ transactions?: Transaction[] }>(`/address/${address}/transactions`);
-        
-        // Handle different response formats
-        if (Array.isArray(data)) {
-            return data;
-        }
-        
-        if (data.transactions && Array.isArray(data.transactions)) {
-            return data.transactions;
-        }
-        
-        // If API doesn't support this endpoint, try alternative
-        console.warn('[ExplorerAPI] Address transactions endpoint not available, trying program transitions');
-        return [];
-    } catch (error: any) {
-        console.error('[ExplorerAPI] Failed to fetch address transactions:', error);
-        // Return empty array instead of throwing
-        return [];
-    }
-}
-
-// 2. Get transaction details
-export async function getTransaction(txId: string): Promise<TransactionDetails | null> {
-    try {
-        const data = await fetchAPI<TransactionDetails>(`/transaction/${txId}`);
-        return data;
-    } catch (error: any) {
-        console.error('[ExplorerAPI] Failed to fetch transaction:', error);
-        return null;
-    }
-}
-
-// 3. Get program transitions (function calls)
-// NOTE: This endpoint returns 400 Bad Request, API may not support it
-export async function getProgramTransitions(): Promise<Transition[]> {
-    // API endpoint doesn't work, return empty array
-    console.warn('[ExplorerAPI] getProgramTransitions endpoint not available (returns 400)');
-    return [];
-}
-
-// 4. Filter only donation transactions
-export async function filterDonationTransactions(
-    transactions: Transaction[],
-    programId: string
-): Promise<DonationTransaction[]> {
-    const donationTxs: DonationTransaction[] = [];
-
-    for (const tx of transactions) {
-        // Check if transaction is for our program
-        if (tx.program !== programId && tx.program !== programId.replace('.aleo', '')) {
-            continue;
-        }
-
-        // Check if it's a send_donation function call
-        const isDonation = tx.function === 'send_donation' || 
-                          tx.transitions?.some(t => t.function === 'send_donation');
-
-        if (!isDonation) {
-            continue;
-        }
-
-        // Extract donation data from transaction
-        const donationTx = await parseDonationTransaction(tx, programId);
-        if (donationTx) {
-            donationTxs.push(donationTx);
-        }
-    }
-
-    return donationTxs;
-}
-
-// Parse transaction into DonationTransaction
-async function parseDonationTransaction(tx: Transaction, programId: string): Promise<DonationTransaction | null> {
-    try {
-        // Find send_donation transition
-        const donationTransition = tx.transitions?.find(
-            t => t.function === 'send_donation' && 
-            (t.program === programId || t.program === programId.replace('.aleo', ''))
-        );
-
-        if (!donationTransition) {
+            console.warn("Profile not found or error fetching:", response.statusText);
             return null;
         }
 
-        // Extract inputs: [recipient (public address), amount (private u64), message (private field)]
-        const inputs = donationTransition.inputs || [];
+        const data = await response.json();
+        console.log("Raw profile data from API:", JSON.stringify(data, null, 2));
         
-        // First input should be recipient (public address)
-        const recipientInput = inputs.find(inp => 
-            inp.type === 'address' || 
-            (inp.value && inp.value.startsWith('aleo1'))
-        );
+        if (!data) {
+            console.warn("Empty data returned from API");
+            return null;
+        }
+
+        // Parse fields - API might return different formats:
+        // 1. Object with name/bio fields: { name: "123field", bio: "456field" }
+        // 2. Object with c0/c1 fields: { c0: "123field", c1: "456field" }
+        // 3. String representation: "{ name: 123field, bio: 456field }"
+        // 4. Nested structure
         
-        // Second input should be amount (private u64)
-        const amountInput = inputs.find((inp, idx) => 
-            idx === 1 || 
-            inp.type === 'u64' || 
-            (inp.value && inp.value.includes('u64'))
-        );
-
-        // Third input should be message (private field)
-        const messageInput = inputs.find((inp, idx) => 
-            idx === 2 || 
-            inp.type === 'field' || 
-            (inp.value && inp.value.includes('field'))
-        );
-
-        const receiver = recipientInput?.value || '';
-        const amountStr = amountInput?.value || '0u64';
-        const messageField = messageInput?.value || '';
-
-        // Parse amount (convert from microcredits to ALEO)
-        const amountMatch = amountStr.match(/(\d+)u64/);
-        const amountMicro = amountMatch ? BigInt(amountMatch[1]) : 0n;
-        const amount = Number(amountMicro) / 1_000_000;
-
-        // Try to decode message (if possible)
-        let message: string | undefined;
-        if (messageField && messageField !== '0field') {
-            try {
-                // Dynamic import to avoid circular dependency
-                const aleoUtils = await import('./aleo');
-                message = aleoUtils.fieldToString(messageField);
-            } catch (e) {
-                message = '[Encrypted]';
+        let rawName: string | undefined;
+        let rawBio: string | undefined;
+        
+        // Try different possible formats
+        if (typeof data === 'string') {
+            // Parse string representation - handle newlines and whitespace
+            // Format: "{\n  name: 461480490593field,\n  bio: 26484field\n}"
+            const normalized = data.replace(/\s+/g, ' '); // Normalize whitespace
+            const nameMatch = normalized.match(/name:\s*(\d+field)/i);
+            const bioMatch = normalized.match(/bio:\s*(\d+field)/i);
+            rawName = nameMatch?.[1];
+            rawBio = bioMatch?.[1];
+            
+            // If regex didn't work, try to parse as JSON-like structure
+            if (!rawName) {
+                try {
+                    // Try to extract field values more flexibly
+                    const namePattern = /name[:\s]+(\d+field)/i;
+                    const bioPattern = /bio[:\s]+(\d+field)/i;
+                    const nameMatch2 = data.match(namePattern);
+                    const bioMatch2 = data.match(bioPattern);
+                    rawName = nameMatch2?.[1];
+                    rawBio = bioMatch2?.[1];
+                } catch (e) {
+                    console.warn("Failed to parse string format:", e);
+                }
+            }
+        } else if (typeof data === 'object' && data !== null) {
+            // Try direct fields first
+            rawName = data.name || data.c0 || data[0];
+            rawBio = data.bio || data.c1 || data[1];
+            
+            // If still not found, try nested structures
+            if (!rawName && data.value) {
+                rawName = data.value.name || data.value.c0;
+                rawBio = data.value.bio || data.value.c1;
             }
         }
-
-        // Get sender from transaction (if available)
-        // In Aleo, sender is usually in the transaction metadata
-        const sender = (tx as any).sender || (tx as any).caller || '';
-
-        // Get timestamp
-        const timestamp = tx.timestamp || Date.now() / 1000;
-
-        // Get status
-        const status = tx.status || (tx.block_height ? 'confirmed' : 'pending');
-
-        return {
-            ...tx,
-            sender,
-            receiver,
-            amount,
-            message,
-            explorerUrl: `${EXPLORER_URL}/transaction/${tx.id}`,
-            status: status as 'pending' | 'confirmed' | 'failed',
-            timestamp,
-        };
+        
+        console.log("Parsed fields:", { rawName, rawBio });
+        
+        // If we have at least name field, return profile (even if empty)
+        if (rawName) {
+            const decodedName = fieldToString(rawName);
+            const decodedBio = rawBio ? fieldToString(rawBio) : "";
+            
+            console.log("Decoded profile:", { name: decodedName, bio: decodedBio });
+            
+            return {
+                name: decodedName,
+                bio: decodedBio
+            };
+        }
+        
+        console.warn("Could not parse profile data - no name field found");
+        return null;
+        
     } catch (error) {
-        console.error('[ExplorerAPI] Failed to parse donation transaction:', error);
+        console.error("Error fetching profile:", error);
         return null;
     }
-}
-
-// 5. Categorize donations into sent and received
-export function categorizeDonations(
-    transactions: DonationTransaction[],
-    userAddress: string
-): { sent: DonationTransaction[]; received: DonationTransaction[] } {
-    const sent: DonationTransaction[] = [];
-    const received: DonationTransaction[] = [];
-
-    for (const tx of transactions) {
-        // If sender matches user, it's a sent donation
-        if (tx.sender && tx.sender.toLowerCase() === userAddress.toLowerCase()) {
-            sent.push(tx);
-        }
-        // If receiver matches user, it's a received donation
-        else if (tx.receiver && tx.receiver.toLowerCase() === userAddress.toLowerCase()) {
-            received.push(tx);
-        }
-    }
-
-    return { sent, received };
-}
-
-// Helper: Get explorer URL for transaction
-export function getExplorerUrl(txId: string, network: 'testnet' | 'mainnet' = 'testnet'): string {
-    const baseUrl = network === 'testnet' 
-        ? 'https://testnet.explorer.provable.com'
-        : 'https://explorer.provable.com';
-    return `${baseUrl}/transaction/${txId}`;
-}
-
-// Validate transaction data
-export function validateTransaction(data: unknown): data is Transaction {
-    return (
-        typeof data === 'object' &&
-        data !== null &&
-        'id' in data &&
-        typeof (data as any).id === 'string'
-    );
-}
-
+};
