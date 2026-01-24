@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NeoCard, NeoButton, NeoInput, NeoBadge } from '../components/NeoComponents';
 import { Creator } from '../types';
-import { Search, Heart, Share2, DollarSign, Loader2 } from 'lucide-react';
+import { Search, DollarSign, Loader2 } from 'lucide-react';
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
@@ -15,7 +15,6 @@ const Explore: React.FC = () => {
   const [creators, setCreators] = useState<Creator[]>([]);
   const [loading, setLoading] = useState(false);
   const [donationAmount, setDonationAmount] = useState<string>("1");
-  const [selectedCreator, setSelectedCreator] = useState<Creator | null>(null);
 
   const [searchError, setSearchError] = useState<string | null>(null);
 

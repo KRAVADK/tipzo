@@ -2,11 +2,11 @@ export interface Creator {
   id: string;
   name: string;
   handle: string;
-  category: 'Art' | 'Code' | 'Music' | 'Gaming';
+  category: 'Art' | 'Code' | 'Music' | 'Gaming' | 'User';
   avatar: string;
   bio: string;
   verified: boolean;
-  color: 'yellow' | 'green' | 'pink' | 'orange';
+  color: 'yellow' | 'green' | 'pink' | 'orange' | 'white';
 }
 
 export interface Transaction {

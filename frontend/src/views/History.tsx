@@ -173,7 +173,7 @@ const History: React.FC = () => {
                       <div>
                         <div className="font-bold text-lg flex items-center gap-2">
                           Received from {formatAddress(tx.sender || "")}
-                          <EyeOff size={16} className="text-gray-500" title="Private Record" />
+                          <span title="Private Record"><EyeOff size={16} className="text-gray-500" /></span>
                         </div>
                         <div className="text-sm font-medium text-gray-500">{dateStr}</div>
                         {message && message !== "0field" && <div className="text-sm italic text-gray-600 mt-1">"{message}"</div>}
@@ -217,7 +217,7 @@ const History: React.FC = () => {
                       <div>
                         <div className="font-bold text-lg flex items-center gap-2">
                           Sent to {formatAddress(tx.recipient || "")}
-                          <EyeOff size={16} className="text-gray-500" title="Private Record" />
+                          <span title="Private Record"><EyeOff size={16} className="text-gray-500" /></span>
                         </div>
                         <div className="text-sm font-medium text-gray-500">{dateStr}</div>
                         {message && message !== "0field" && <div className="text-sm italic text-gray-600 mt-1">"{message}"</div>}
