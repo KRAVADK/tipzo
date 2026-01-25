@@ -117,14 +117,19 @@ const Explore: React.FC = () => {
       
       // If no profiles found locally, try to discover from shared storage or seed list
       if (addressArray.length === 0) {
-        console.log("[Explore] No cached profiles found. Profiles will appear as users create them.");
+        console.log("[Explore] No cached profiles found. Profiles will appear as users create them or when you search for them.");
       }
       
       // Fetch profiles in parallel (with limit to avoid too many requests)
+      // This works even without wallet - we're just reading public data from blockchain
       const fetchPromises = addressArray.slice(0, 100).map(async (address) => {
         try {
           const chainProfile = await getProfileFromChain(address);
           if (chainProfile) {
+            // Profile exists on blockchain - cache it for future use
+            // This ensures the profile is available even for new users
+            cacheProfile(address, chainProfile);
+            
             const profileName = chainProfile.name && chainProfile.name.trim() ? chainProfile.name : "Anonymous";
             const cacheInfo = cacheData.get(address);
             const creator: Creator = {
@@ -140,8 +145,21 @@ const Explore: React.FC = () => {
             // Store creation date for sorting (attach to creator object)
             (creator as any).createdAt = cacheInfo?.createdAt || Date.now();
             return creator;
+          } else {
+            // Profile doesn't exist on blockchain - remove from known list
+            console.warn(`[Explore] Profile for ${address} not found on blockchain, removing from list`);
+            try {
+              const knownList = localStorage.getItem('tipzo_known_profiles');
+              if (knownList) {
+                const addresses = JSON.parse(knownList);
+                const filtered = addresses.filter((addr: string) => addr !== address);
+                localStorage.setItem('tipzo_known_profiles', JSON.stringify(filtered));
+              }
+            } catch (e) {
+              console.warn("Failed to remove invalid profile from list:", e);
+            }
+            return null;
           }
-          return null;
         } catch (e) {
           console.warn(`Failed to fetch profile for ${address}:`, e);
           return null;
