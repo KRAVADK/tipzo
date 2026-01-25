@@ -92,9 +92,17 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
             
             const checkPromises = Array.from(addressesToCheck).slice(0, 50).map(async (address) => {
                 try {
+                    // Check if already cached to avoid unnecessary API calls
+                    const cacheKey = `tipzo_profile_cache_${address}`;
+                    const existing = localStorage.getItem(cacheKey);
+                    if (existing) {
+                        // Already cached, skip API call
+                        return address;
+                    }
+                    
                     const profile = await getProfileFromChain(address);
                     if (profile) {
-                        cacheProfile(address, profile);
+                        // getProfileFromChain already caches, so we don't need to call cacheProfile again
                         return address;
                     }
                     return null;
@@ -119,7 +127,7 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
 };
 
 // Helper function to cache profile in localStorage for nickname search
-export const cacheProfile = (address: string, profile: { name: string; bio: string }, createdAt?: number) => {
+export const cacheProfile = (address: string, profile: { name: string; bio: string }, createdAt?: number, skipEvent: boolean = false) => {
     try {
         const cacheKey = `tipzo_profile_cache_${address}`;
         const now = Date.now();
@@ -129,6 +137,8 @@ export const cacheProfile = (address: string, profile: { name: string; bio: stri
         // Check if profile already exists in cache
         const existing = localStorage.getItem(cacheKey);
         let finalCreatedAt = profileCreatedAt;
+        let isNewProfile = false;
+        let dataChanged = false;
         
         if (existing) {
             try {
@@ -137,9 +147,16 @@ export const cacheProfile = (address: string, profile: { name: string; bio: stri
                 if (existingData.createdAt && existingData.createdAt < profileCreatedAt) {
                     finalCreatedAt = existingData.createdAt;
                 }
+                // Check if data has changed
+                if (existingData.name !== profile.name || existingData.bio !== profile.bio) {
+                    dataChanged = true;
+                }
             } catch (e) {
-                // If parsing fails, use new date
+                // If parsing fails, treat as new
+                isNewProfile = true;
             }
+        } else {
+            isNewProfile = true;
         }
         
         localStorage.setItem(cacheKey, JSON.stringify({
@@ -153,11 +170,13 @@ export const cacheProfile = (address: string, profile: { name: string; bio: stri
         addKnownProfileAddress(address);
         console.log(`[Cache] Cached profile for ${address}:`, profile.name);
         
-        // Dispatch event to notify other components about new profile
-        // This helps synchronize profiles across the app
-        window.dispatchEvent(new CustomEvent('profileCached', { 
-            detail: { address, name: profile.name } 
-        }));
+        // Only dispatch event if this is a new profile or data changed, and skipEvent is false
+        // This prevents infinite loops when loading profiles from cache
+        if (!skipEvent && (isNewProfile || dataChanged)) {
+            window.dispatchEvent(new CustomEvent('profileCached', { 
+                detail: { address, name: profile.name } 
+            }));
+        }
     } catch (e) {
         console.warn("Failed to cache profile:", e);
     }
@@ -247,8 +266,13 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
                 bio: decodedBio
             };
             
-            // Cache the profile for nickname search
-            cacheProfile(address, profileData);
+            // Cache the profile for nickname search (skip event to prevent loops)
+            // Check if profile is already cached to avoid unnecessary events
+            const cacheKey = `tipzo_profile_cache_${address}`;
+            const existing = localStorage.getItem(cacheKey);
+            const shouldSkipEvent = !!existing; // Skip event if already cached
+            
+            cacheProfile(address, profileData, undefined, shouldSkipEvent);
             
             return profileData;
         }
