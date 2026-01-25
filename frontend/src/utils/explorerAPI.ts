@@ -32,10 +32,10 @@ export interface UserProfile {
 const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
 const EXPLORER_API_BASE = "https://api.explorer.provable.com/v1/testnet";
 // Try multiple RPC endpoints for reliability
+// Note: vm.aleo.org has CORS issues, so it's excluded
 const ALEO_RPC_URLS = [
     "https://api.testnet.aleo.org/v1",
-    "https://testnet3.aleorpc.com",
-    "https://vm.aleo.org/api/testnet3"
+    "https://testnet3.aleorpc.com"
 ];
 
 // Helper function to get list of all known profile addresses
@@ -60,7 +60,7 @@ export const addKnownProfileAddress = (address: string): boolean => {
         if (!knownAddresses.includes(address)) {
             knownAddresses.push(address);
             localStorage.setItem('tipzo_known_profiles', JSON.stringify(knownAddresses));
-            console.log(`[Cache] Added ${address} to known profiles list (total: ${knownAddresses.length})`);
+            // Profile added to known list (no logging to reduce console spam)
             return true; // New address added
         }
         return false; // Address already existed
@@ -144,7 +144,6 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
     const knownAddresses = getKnownProfileAddressesFromStorage();
     const initialCount = knownAddresses.length;
     knownAddresses.forEach(addr => addresses.add(addr));
-    console.log(`[Discover] Starting with ${initialCount} known addresses from storage`);
     
     try {
         // Try to get transactions for create_profile and update_profile using RPC
@@ -174,7 +173,6 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
                     if (response.ok) {
                         const data = await response.json();
                         if (data.result && Array.isArray(data.result)) {
-                            console.log(`[Discover] Found ${data.result.length} transactions for ${functionName} via ${rpcUrl}`);
                             success = true;
                             
                             data.result.forEach((tx: any) => {
@@ -272,7 +270,7 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
             }
             
             if (!success) {
-                console.warn(`[Discover] All RPC endpoints failed for ${functionName}, using known addresses from storage`);
+                // RPC failed - silently continue with known addresses
                 // Try alternative method using Explorer API
                 try {
                     const explorerAddresses = await discoverProfilesFromExplorerAPI();
@@ -286,16 +284,10 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
             }
         }
         
-        const newAddresses = addresses.size - initialCount;
-        if (newAddresses > 0) {
-            console.log(`[Discover] Discovered ${addresses.size} total profile addresses (${newAddresses} new from blockchain)`);
-        } else {
-            console.log(`[Discover] Using ${initialCount} known addresses from storage (RPC unavailable or no new profiles found)`);
-        }
+        // Return discovered addresses (no logging to reduce console spam)
         
     } catch (e) {
-        console.warn("Failed to discover profile addresses:", e);
-        console.log(`[Discover] Using ${initialCount} known addresses from storage as fallback`);
+        // Discovery failed - silently return known addresses
     }
     
     return Array.from(addresses);
@@ -338,7 +330,7 @@ export const cacheProfile = (address: string, profile: { name: string; bio: stri
         // When a profile is cached, it's added to the global list that all users can see
         // This ensures profiles are discoverable even for new users
         const wasNew = addKnownProfileAddress(address);
-        console.log(`[Cache] Cached profile for ${address}:`, profile.name, wasNew ? '(new)' : '(existing)');
+        // Profile cached (no logging to reduce console spam)
         
         // Dispatch event to notify other components that a new profile was discovered
         // This triggers Explore to refresh and show the new profile
@@ -351,7 +343,7 @@ export const cacheProfile = (address: string, profile: { name: string; bio: stri
 export const getProfileFromChain = async (address: string): Promise<UserProfile | null> => {
     try {
         const url = `${MAPPING_URL}/${PROGRAM_ID}/mapping/profiles/${address}`;
-        console.log(`Fetching profile from: ${url}`);
+        // Fetching profile from blockchain
         
         const response = await fetch(url);
         if (!response.ok) {
@@ -360,7 +352,7 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
         }
 
         const data = await response.json();
-        console.log("Raw profile data from API:", JSON.stringify(data, null, 2));
+        // Raw profile data received from API
         
         // If profile exists, automatically add to known profiles list
         // This ensures profiles are discoverable by all users, even in anonymous mode
@@ -368,7 +360,7 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
         if (data) {
             const wasNew = addKnownProfileAddress(address);
             if (wasNew) {
-                console.log(`[Profile] New profile discovered: ${address} - added to global list`);
+                // New profile discovered and added to global list
             }
         }
         
@@ -422,14 +414,14 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
             }
         }
         
-        console.log("Parsed fields:", { rawName, rawBio });
+        // Parsed profile fields
         
         // If we have at least name field, return profile (even if empty)
         if (rawName) {
             const decodedName = fieldToString(rawName);
             const decodedBio = rawBio ? fieldToString(rawBio) : "";
             
-            console.log("Decoded profile:", { name: decodedName, bio: decodedBio });
+            // Profile decoded successfully
             
             const profileData = {
                 name: decodedName,
