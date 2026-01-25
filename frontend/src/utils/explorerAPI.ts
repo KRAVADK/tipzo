@@ -60,14 +60,35 @@ export const addKnownProfileAddress = (address: string) => {
 };
 
 // Helper function to cache profile in localStorage for nickname search
-export const cacheProfile = (address: string, profile: { name: string; bio: string }) => {
+export const cacheProfile = (address: string, profile: { name: string; bio: string }, createdAt?: number) => {
     try {
         const cacheKey = `tipzo_profile_cache_${address}`;
+        const now = Date.now();
+        // Use provided createdAt or current time (for new profiles)
+        const profileCreatedAt = createdAt || now;
+        
+        // Check if profile already exists in cache
+        const existing = localStorage.getItem(cacheKey);
+        let finalCreatedAt = profileCreatedAt;
+        
+        if (existing) {
+            try {
+                const existingData = JSON.parse(existing);
+                // Keep the original creation date if it exists
+                if (existingData.createdAt && existingData.createdAt < profileCreatedAt) {
+                    finalCreatedAt = existingData.createdAt;
+                }
+            } catch (e) {
+                // If parsing fails, use new date
+            }
+        }
+        
         localStorage.setItem(cacheKey, JSON.stringify({
             address,
             name: profile.name,
             bio: profile.bio,
-            cachedAt: Date.now()
+            cachedAt: now,
+            createdAt: finalCreatedAt // Store creation date for sorting
         }));
         // Add to known profiles list
         addKnownProfileAddress(address);

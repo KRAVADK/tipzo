@@ -149,11 +149,12 @@ const Profile: React.FC = () => {
             });
             
             // Cache the profile immediately for nickname search (optimistic update)
+            // Use current time as creation date for new profiles
             if (publicKey) {
                 cacheProfile(publicKey, {
                     name: name,
                     bio: bio
-                });
+                }, existsOnChain ? undefined : Date.now());
                 // Dispatch event to update Explore page
                 window.dispatchEvent(new CustomEvent('profileUpdated'));
             }
