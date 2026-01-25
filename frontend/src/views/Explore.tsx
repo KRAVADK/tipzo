@@ -278,18 +278,21 @@ const Explore: React.FC = () => {
             const profile = JSON.parse(cached);
             if (profile.address) {
               const profileName = profile.name && profile.name.trim() ? profile.name : "Anonymous";
+              const profileBio = profile.bio || "";
               const creator: Creator = {
                 id: profile.address,
                 name: profileName,
                 handle: profile.address.slice(0, 10) + "...",
                 category: 'User' as const,
                 avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${profile.address}`,
-                bio: profile.bio || "",
+                bio: profileBio,
                 verified: false,
                 color: 'white' as const
               };
               profilesList.push(creator);
-              console.log(`[Explore] Loaded from cache: ${profileName} (${profile.address.slice(0, 10)}...)`);
+              console.log(`[Explore] Loaded from cache: ${profileName} (${profile.address.slice(0, 10)}...) - name: "${profileName}", bio: "${profileBio}"`);
+            } else {
+              console.warn(`[Explore] Profile in cache missing address:`, profile);
             }
           }
         } catch (e) {
@@ -298,6 +301,7 @@ const Explore: React.FC = () => {
       }
       
       console.log(`[Explore] Total profiles loaded from cache: ${profilesList.length}`);
+      console.log(`[Explore] Profile names in cache:`, profilesList.map(c => `"${c.name}"`));
     } catch (e) {
       console.warn("Failed to get cached profiles:", e);
     }
@@ -334,30 +338,54 @@ const Explore: React.FC = () => {
         const allCachedProfiles = getAllProfilesFromCache();
         const queryLower = trimmedSearch.toLowerCase();
         
+        console.log(`[Search] Searching for: "${trimmedSearch}" (lowercase: "${queryLower}")`);
+        console.log(`[Search] Total cached profiles to search: ${allCachedProfiles.length}`);
+        console.log(`[Search] Cached profile names:`, allCachedProfiles.map(c => c.name));
+        
         let matchingProfiles: Creator[] = [];
         
         if (trimmedSearch.startsWith("aleo1")) {
           // Search by address
-          matchingProfiles = allCachedProfiles.filter(creator => 
-            creator.id.toLowerCase().includes(queryLower)
-          );
+          console.log(`[Search] Searching by address...`);
+          matchingProfiles = allCachedProfiles.filter(creator => {
+            const matches = creator.id.toLowerCase().includes(queryLower);
+            if (matches) {
+              console.log(`[Search] ✅ Found by address: ${creator.name} (${creator.id.slice(0, 10)}...)`);
+            }
+            return matches;
+          });
         } else {
           // Search by name or bio
+          console.log(`[Search] Searching by name/bio...`);
           matchingProfiles = allCachedProfiles.filter(creator => {
-            const nameMatch = creator.name.toLowerCase().includes(queryLower);
-            const bioMatch = creator.bio.toLowerCase().includes(queryLower);
-            return nameMatch || bioMatch;
+            const nameLower = creator.name.toLowerCase();
+            const bioLower = (creator.bio || "").toLowerCase();
+            const nameMatch = nameLower.includes(queryLower);
+            const bioMatch = bioLower.includes(queryLower);
+            const matches = nameMatch || bioMatch;
+            
+            if (matches) {
+              console.log(`[Search] ✅ Found by name/bio: ${creator.name} (name: "${nameLower}", bio: "${bioLower}")`);
+            } else {
+              console.log(`[Search] ❌ No match: ${creator.name} (name: "${nameLower}", bio: "${bioLower}")`);
+            }
+            return matches;
           });
         }
         
+        console.log(`[Search] Found ${matchingProfiles.length} matching profiles`);
+        
         // If found in cache, show immediately
         if (matchingProfiles.length > 0) {
+          console.log(`[Search] ✅ Showing ${matchingProfiles.length} profiles from cache`);
           setCreators(matchingProfiles);
           setSelectedCreatorForDonation(matchingProfiles[0]);
           setSearchError(null);
           setLoading(false);
           return;
         }
+        
+        console.log(`[Search] ❌ No profiles found in cache for "${trimmedSearch}"`);
         
         // STEP 2: Not in cache, try blockchain (only for full addresses or if registry exists)
         if (trimmedSearch.startsWith("aleo1") && trimmedSearch.length >= 63) {
