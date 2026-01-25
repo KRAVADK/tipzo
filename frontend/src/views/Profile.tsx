@@ -143,23 +143,23 @@ const Profile: React.FC = () => {
 
         if (wallet.adapter && 'requestTransaction' in wallet.adapter) {
             // @ts-ignore
-            await requestTransactionWithRetry(wallet.adapter, transaction, {
+            const txId = await requestTransactionWithRetry(wallet.adapter, transaction, {
                 timeout: 30000, // 30 seconds for profile creation
                 maxRetries: 3
             });
             
-            // Cache the profile immediately for nickname search (optimistic update)
-            // Use current time as creation date for new profiles
-            if (publicKey) {
-                cacheProfile(publicKey, {
-                    name: name,
-                    bio: bio
-                }, existsOnChain ? undefined : Date.now());
-                // Dispatch event to update Explore page
-                window.dispatchEvent(new CustomEvent('profileUpdated'));
+            if (txId) {
+                // Cache the profile immediately for nickname search (optimistic update)
+                // Use current time as creation date for new profiles
+                if (publicKey) {
+                    cacheProfile(publicKey, {
+                        name: name,
+                        bio: bio
+                    }, existsOnChain ? undefined : Date.now());
+                }
+                
+                alert(`Profile ${existsOnChain ? 'updated' : 'created'} successfully!\n\nFunction: ${functionName}\nTransaction: ${txId.slice(0, 8)}...\n\nIt may take a few minutes to appear in Explore.`);
             }
-            
-            alert(`Profile ${existsOnChain ? 'updated' : 'created'} successfully!\n\nFunction: ${functionName}\nTransaction sent! It may take a few minutes to appear.`);
         }
 
       } catch (e) {
