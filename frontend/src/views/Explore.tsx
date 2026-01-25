@@ -72,13 +72,16 @@ const Explore: React.FC = () => {
       // If we have very few profiles, try to discover more from blockchain transactions
       let addressArray = Array.from(knownAddresses);
       
-      // Always try to discover from blockchain if we have less than 20 profiles
+      // Always try to discover from blockchain if we have less than 50 profiles
       // This ensures new profiles are found even if RPC fails sometimes
-      if (addressArray.length < 20) {
-        console.log("[Explore] Few profiles found locally, discovering from blockchain...");
+      // We increase the threshold to be more aggressive about discovery
+      if (addressArray.length < 50) {
+        console.log("[Explore] Discovering profiles from blockchain...");
         try {
           const { discoverProfileAddresses } = await import('../utils/explorerAPI');
           const discoveredAddresses = await discoverProfileAddresses();
+          const beforeCount = addressArray.length;
+          
           if (discoveredAddresses.length > 0) {
             discoveredAddresses.forEach(addr => {
               knownAddresses.add(addr);
@@ -87,22 +90,26 @@ const Explore: React.FC = () => {
               }
             });
             addressArray = Array.from(knownAddresses);
-            console.log(`[Explore] Discovered ${discoveredAddresses.length} total profile addresses (${discoveredAddresses.length - addressArray.length + knownAddresses.size} new from blockchain)`);
+            const newCount = addressArray.length - beforeCount;
+            if (newCount > 0) {
+              console.log(`[Explore] Discovered ${newCount} new profile addresses from blockchain (total: ${addressArray.length})`);
+            } else {
+              console.log(`[Explore] Using ${addressArray.length} known profile addresses from storage`);
+            }
           } else {
-            console.log("[Explore] No additional profiles discovered from blockchain transactions, using known addresses from storage");
+            console.log(`[Explore] Using ${addressArray.length} known profile addresses from storage (RPC unavailable)`);
           }
         } catch (e) {
           console.warn("[Explore] Failed to discover profiles from blockchain:", e);
-          console.log("[Explore] Using known addresses from storage as fallback");
+          console.log(`[Explore] Using ${addressArray.length} known profile addresses from storage as fallback`);
         }
+      } else {
+        console.log(`[Explore] Using ${addressArray.length} known profile addresses (discovery skipped - enough profiles found)`);
       }
       
-      // If we still have very few profiles, try to verify all known addresses
-      // This helps when RPC is unavailable but we have addresses in storage
-      if (addressArray.length > 0 && addressArray.length < 5) {
-        console.log(`[Explore] Found ${addressArray.length} profiles. They will appear as more users create profiles or when you search for them.`);
-      } else if (addressArray.length === 0) {
-        console.log("[Explore] No profiles found. They will appear as users create them or when you search for them.");
+      // Log status for debugging
+      if (addressArray.length === 0) {
+        console.log("[Explore] No profiles found. Profiles will appear as users create them or when you search for them.");
       }
       
       // Fetch and verify all known profiles from blockchain
