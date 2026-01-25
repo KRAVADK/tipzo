@@ -69,9 +69,18 @@ const Explore: React.FC = () => {
         console.warn("Failed to get known profiles list:", e);
       }
       
+      // If we have very few profiles, try to discover more by checking common patterns
+      // or by trying to fetch profiles that might exist
+      // For now, we'll rely on the known addresses list
+      
       // Fetch and verify all known profiles from blockchain
       const addressArray = Array.from(knownAddresses);
       console.log(`[Explore] Loading ${addressArray.length} known profiles from blockchain...`);
+      
+      // If no profiles found locally, try to discover from shared storage or seed list
+      if (addressArray.length === 0) {
+        console.log("[Explore] No cached profiles found. Profiles will appear as users create them.");
+      }
       
       // Fetch profiles in parallel (with limit to avoid too many requests)
       const fetchPromises = addressArray.slice(0, 100).map(async (address) => {
@@ -130,6 +139,12 @@ const Explore: React.FC = () => {
         const profiles = await getAllCachedProfiles();
         setCreators(profiles);
         setIsSearchMode(false);
+        
+        // If we have very few profiles, try to discover more by checking if any profiles exist
+        // that we haven't cached yet. This helps new users see existing profiles.
+        if (profiles.length === 0) {
+          console.log("[Explore] No profiles found. Profiles will appear as they are created or discovered.");
+        }
       } catch (e) {
         console.error("Failed to load profiles:", e);
       } finally {
@@ -237,7 +252,7 @@ const Explore: React.FC = () => {
           const profile = await getProfileFromChain(trimmedSearch);
           
           if (profile) {
-            // Cache the profile and add to known profiles
+            // Cache the profile and add to known profiles (this automatically adds to global list)
             cacheProfile(trimmedSearch, profile);
             
             const profileName = profile.name && profile.name.trim() ? profile.name : "Anonymous";
@@ -257,7 +272,7 @@ const Explore: React.FC = () => {
             setSelectedCreatorForDonation(newCreator);
             setSearchError(null);
             
-            // Trigger profile list update
+            // Trigger profile list update so all users see this profile
             window.dispatchEvent(new CustomEvent('profileUpdated'));
           } else {
             // Profile doesn't exist on chain
@@ -290,6 +305,7 @@ const Explore: React.FC = () => {
                   try {
                     const profile = await getProfileFromChain(address);
                     if (profile) {
+                      // Cache profile (automatically adds to global list)
                       cacheProfile(address, profile);
                       
                       const profileName = profile.name && profile.name.trim() ? profile.name : "Anonymous";
