@@ -126,7 +126,7 @@ const discoverProfilesFromExplorerAPI = async (): Promise<string[]> => {
             // This is a placeholder - actual implementation depends on API structure
         }
     } catch (e) {
-        console.warn("[Discover] Failed to get program data from Explorer API:", e);
+        // Explorer API failed - silently continue
     }
     
     return Array.from(addresses);
@@ -262,16 +262,12 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
             }
             
             if (!success) {
-                // RPC failed - silently continue with known addresses
-                // Try alternative method using Explorer API
+                // RPC failed - try alternative method using Explorer API
                 try {
                     const explorerAddresses = await discoverProfilesFromExplorerAPI();
                     explorerAddresses.forEach(addr => addresses.add(addr));
-                    if (explorerAddresses.length > 0) {
-                        console.log(`[Discover] Found ${explorerAddresses.length} addresses via Explorer API`);
-                    }
                 } catch (e) {
-                    console.warn("[Discover] Explorer API method also failed:", e);
+                    // Explorer API also failed - silently continue
                 }
             }
         }
