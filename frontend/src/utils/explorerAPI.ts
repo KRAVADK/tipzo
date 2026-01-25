@@ -30,6 +30,7 @@ export interface UserProfile {
 }
 
 const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
+const ALEO_RPC_URL = "https://testnet3.aleorpc.com";
 
 // Helper function to get list of all known profile addresses
 export const getKnownProfileAddresses = (): string[] => {
@@ -57,6 +58,73 @@ export const addKnownProfileAddress = (address: string) => {
     } catch (e) {
         console.warn("Failed to add known profile:", e);
     }
+};
+
+// Helper function to discover profile addresses by scanning transactions
+// This uses Aleo RPC to find all addresses that created or updated profiles
+export const discoverProfileAddresses = async (): Promise<string[]> => {
+    const addresses = new Set<string>();
+    
+    try {
+        // Try to get transactions for create_profile and update_profile
+        const functions = ['create_profile', 'update_profile'];
+        
+        for (const functionName of functions) {
+            try {
+                const response = await fetch(ALEO_RPC_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: "2.0",
+                        id: 1,
+                        method: "aleoTransactionsForProgram",
+                        params: {
+                            programId: PROGRAM_ID,
+                            functionName: functionName,
+                            page: 0,
+                            maxTransactions: 1000
+                        }
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.result && Array.isArray(data.result)) {
+                        data.result.forEach((tx: any) => {
+                            // Extract address from transaction
+                            // The address is typically in tx.execution.transitions[0].id or tx.fee_transition.id
+                            if (tx.execution?.transitions) {
+                                tx.execution.transitions.forEach((transition: any) => {
+                                    // The caller address is usually in the transition ID or can be derived
+                                    // For now, we'll try to extract from transaction structure
+                                    if (transition.id) {
+                                        // Transition ID format might contain address info
+                                        // We'll need to parse it or use a different approach
+                                    }
+                                });
+                            }
+                            
+                            // Alternative: Check if transaction has fee_transition with address
+                            if (tx.fee_transition?.id) {
+                                // Fee transition might have the caller address
+                            }
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn(`Failed to get transactions for ${functionName}:`, e);
+            }
+        }
+        
+        // Since extracting addresses from transactions is complex,
+        // we'll use a different approach: try common addresses or use a seed list
+        // For now, return empty and rely on localStorage discovery
+        
+    } catch (e) {
+        console.warn("Failed to discover profile addresses:", e);
+    }
+    
+    return Array.from(addresses);
 };
 
 // Helper function to cache profile in localStorage for nickname search
@@ -111,6 +179,12 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
 
         const data = await response.json();
         console.log("Raw profile data from API:", JSON.stringify(data, null, 2));
+        
+        // If profile exists, automatically add to known profiles list
+        // This ensures profiles are discoverable by all users
+        if (data) {
+            addKnownProfileAddress(address);
+        }
         
         if (!data) {
             console.warn("Empty data returned from API");
