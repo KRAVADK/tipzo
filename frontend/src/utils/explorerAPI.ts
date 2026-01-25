@@ -100,8 +100,9 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
         try {
             const profile = await getProfileFromChain(address);
             if (profile) {
-                // Profile exists on chain - add to known list
-                addKnownProfileAddress(address);
+                // Profile exists on chain - cache it and add to known list
+                // This ensures the profile is available for all users on this device
+                cacheProfile(address, profile);
                 return address;
             }
             return null;
