@@ -65,152 +65,22 @@ export const addKnownProfileAddress = (address: string) => {
     }
 };
 
-// Helper function to discover profile addresses by scanning transactions
-// This uses Aleo RPC to find all addresses that created or updated profiles
+// Helper function to discover profile addresses
+// Since RPC endpoints have CORS issues, we use alternative methods:
+// 1. Profiles are automatically added when created/updated
+// 2. Profiles are discovered from donation history
+// 3. Profiles can be found through search
+// This function now just returns empty array - discovery happens through other means
 export const discoverProfileAddresses = async (): Promise<string[]> => {
-    const addresses = new Set<string>();
+    // RPC endpoints don't work due to CORS restrictions
+    // Profiles are discovered through:
+    // 1. Automatic addition when created/updated (via cacheProfile)
+    // 2. Donation history (recipients and senders)
+    // 3. Manual search by address or nickname
+    // 4. When users interact with each other
     
-    try {
-        // Try to get transactions for create_profile and update_profile using RPC
-        const functions = ['create_profile', 'update_profile'];
-        
-        for (const functionName of functions) {
-            let success = false;
-            // Try each RPC endpoint until one works
-            for (const rpcUrl of ALEO_RPC_URLS) {
-                try {
-                    const response = await fetch(rpcUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            jsonrpc: "2.0",
-                            id: 1,
-                            method: "aleoTransactionsForProgram",
-                            params: {
-                                programId: PROGRAM_ID,
-                                functionName: functionName,
-                                page: 0,
-                                maxTransactions: 1000
-                            }
-                        })
-                    });
-                
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.result && Array.isArray(data.result)) {
-                            console.log(`[Discover] Found ${data.result.length} transactions for ${functionName} via ${rpcUrl}`);
-                            success = true;
-                            
-                            data.result.forEach((tx: any) => {
-                            // Try multiple ways to extract the caller address
-                            let address: string | null = null;
-                            
-                            // Method 1: Check fee_transition - the owner is usually the caller
-                            if (tx.fee_transition) {
-                                // Fee transition owner is the caller
-                                if (tx.fee_transition.owner && tx.fee_transition.owner.startsWith('aleo1')) {
-                                    address = tx.fee_transition.owner;
-                                } else if (tx.fee_transition.id) {
-                                    // Try to extract from fee transition ID
-                                    const feeId = String(tx.fee_transition.id);
-                                    const addressMatch = feeId.match(/(aleo1[a-z0-9]{58,63})/);
-                                    if (addressMatch) {
-                                        address = addressMatch[1];
-                                    }
-                                }
-                            }
-                            
-                            // Method 2: Check execution transitions - look for finalize operations
-                            if (!address && tx.execution?.transitions) {
-                                for (const transition of tx.execution.transitions) {
-                                    if (transition.function === functionName || transition.function?.includes(functionName)) {
-                                        // Check if transition has owner field
-                                        if (transition.owner && transition.owner.startsWith('aleo1')) {
-                                            address = transition.owner;
-                                            break;
-                                        }
-                                        // Try to extract from transition ID
-                                        if (transition.id) {
-                                            const transitionId = String(transition.id);
-                                            const addressMatch = transitionId.match(/(aleo1[a-z0-9]{58,63})/);
-                                            if (addressMatch) {
-                                                address = addressMatch[1];
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Method 3: Check finalize operations - they contain the caller as first parameter
-                            if (!address && tx.execution?.finalize) {
-                                const finalize = tx.execution.finalize;
-                                if (finalize && Array.isArray(finalize)) {
-                                    for (const op of finalize) {
-                                        if (op && typeof op === 'object') {
-                                            // Finalize operations for create_profile/update_profile have user address as first param
-                                            if (op.mappingKey && op.mappingKey.startsWith('aleo1')) {
-                                                address = op.mappingKey;
-                                                break;
-                                            }
-                                            if (op.key && op.key.startsWith('aleo1')) {
-                                                address = op.key;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Method 4: Check transaction metadata
-                            if (!address) {
-                                if (tx.caller && tx.caller.startsWith('aleo1')) {
-                                    address = tx.caller;
-                                } else if (tx.sender && tx.sender.startsWith('aleo1')) {
-                                    address = tx.sender;
-                                } else if (tx.address && tx.address.startsWith('aleo1')) {
-                                    address = tx.address;
-                                } else if (tx.owner && tx.owner.startsWith('aleo1')) {
-                                    address = tx.owner;
-                                }
-                            }
-                            
-                            if (address && address.length >= 58) {
-                                addresses.add(address);
-                                console.log(`[Discover] Found profile address: ${address} from ${functionName} transaction`);
-                            } else {
-                                console.warn(`[Discover] Could not extract address from transaction:`, tx);
-                                }
-                            });
-                            break; // Success, no need to try other endpoints
-                        } else if (data.error) {
-                            console.warn(`[Discover] RPC error for ${functionName} from ${rpcUrl}:`, data.error);
-                        }
-                    } else {
-                        console.warn(`[Discover] Failed to fetch from ${rpcUrl} for ${functionName}:`, response.status, response.statusText);
-                    }
-                } catch (e) {
-                    console.warn(`[Discover] Exception with ${rpcUrl} for ${functionName}:`, e);
-                    // Continue to next endpoint
-                }
-            }
-            
-            if (!success) {
-                console.warn(`[Discover] All RPC endpoints failed for ${functionName}`);
-                // Note: Profiles will still be discovered through:
-                // 1. Donation history (recipients and senders)
-                // 2. Manual search by address or nickname
-                // 3. When users create/update profiles (they're automatically added to the list)
-            }
-        }
-        
-        console.log(`[Discover] Discovered ${addresses.size} profile addresses from blockchain`);
-        
-    } catch (e) {
-        console.warn("Failed to discover profile addresses:", e);
-    }
-    
-    return Array.from(addresses);
+    console.log("[Discover] Profile discovery via RPC is disabled due to CORS. Profiles are discovered through other methods.");
+    return [];
 };
 
 // Helper function to cache profile in localStorage for nickname search
