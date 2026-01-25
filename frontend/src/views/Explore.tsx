@@ -97,8 +97,8 @@ const Explore: React.FC = () => {
           const cacheKey = `tipzo_profile_cache_${address}`;
           const cached = localStorage.getItem(cacheKey);
           
-          let profileName: string;
-          let profileBio: string;
+          let profileName: string = "Anonymous";
+          let profileBio: string = "";
           let shouldFetchFromChain = false;
           
           if (cached) {
@@ -128,7 +128,7 @@ const Explore: React.FC = () => {
               // No profile on chain and no cache, skip
               return null;
             }
-            // If chainProfile is null but we have cache, use cache data
+            // If chainProfile is null but we have cache, use cache data (already set above)
           }
           
           const cacheInfo = cacheData.get(address);
