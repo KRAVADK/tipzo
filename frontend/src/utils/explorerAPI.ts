@@ -66,7 +66,7 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
     const addresses = new Set<string>();
     
     try {
-        // Try to get transactions for create_profile and update_profile
+        // Try to get transactions for create_profile and update_profile using RPC
         const functions = ['create_profile', 'update_profile'];
         
         for (const functionName of functions) {
@@ -96,47 +96,64 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
                             // Try multiple ways to extract the caller address
                             let address: string | null = null;
                             
-                            // Method 1: Check fee_transition for caller
-                            if (tx.fee_transition?.id) {
-                                // Fee transition ID might contain address
-                                const feeId = tx.fee_transition.id;
-                                // Try to extract aleo1 address from fee transition
-                                const addressMatch = feeId.match(/(aleo1[a-z0-9]+)/);
-                                if (addressMatch) {
-                                    address = addressMatch[1];
+                            // Method 1: Check fee_transition - the owner is usually the caller
+                            if (tx.fee_transition) {
+                                // Fee transition owner is the caller
+                                if (tx.fee_transition.owner && tx.fee_transition.owner.startsWith('aleo1')) {
+                                    address = tx.fee_transition.owner;
+                                } else if (tx.fee_transition.id) {
+                                    // Try to extract from fee transition ID
+                                    const feeId = String(tx.fee_transition.id);
+                                    const addressMatch = feeId.match(/(aleo1[a-z0-9]{58,63})/);
+                                    if (addressMatch) {
+                                        address = addressMatch[1];
+                                    }
                                 }
                             }
                             
-                            // Method 2: Check execution transitions
+                            // Method 2: Check execution transitions - look for finalize operations
                             if (!address && tx.execution?.transitions) {
                                 for (const transition of tx.execution.transitions) {
-                                    if (transition.function === functionName) {
+                                    if (transition.function === functionName || transition.function?.includes(functionName)) {
+                                        // Check if transition has owner field
+                                        if (transition.owner && transition.owner.startsWith('aleo1')) {
+                                            address = transition.owner;
+                                            break;
+                                        }
                                         // Try to extract from transition ID
                                         if (transition.id) {
-                                            const addressMatch = transition.id.match(/(aleo1[a-z0-9]+)/);
+                                            const transitionId = String(transition.id);
+                                            const addressMatch = transitionId.match(/(aleo1[a-z0-9]{58,63})/);
                                             if (addressMatch) {
                                                 address = addressMatch[1];
                                                 break;
-                                            }
-                                        }
-                                        // Try to extract from inputs (first input might be caller)
-                                        if (transition.inputs && transition.inputs.length > 0) {
-                                            for (const input of transition.inputs) {
-                                                if (typeof input === 'string' && input.startsWith('aleo1')) {
-                                                    address = input;
-                                                    break;
-                                                }
-                                                if (typeof input === 'object' && input.value && input.value.startsWith('aleo1')) {
-                                                    address = input.value;
-                                                    break;
-                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                             
-                            // Method 3: Check transaction metadata
+                            // Method 3: Check finalize operations - they contain the caller as first parameter
+                            if (!address && tx.execution?.finalize) {
+                                const finalize = tx.execution.finalize;
+                                if (finalize && Array.isArray(finalize)) {
+                                    for (const op of finalize) {
+                                        if (op && typeof op === 'object') {
+                                            // Finalize operations for create_profile/update_profile have user address as first param
+                                            if (op.mappingKey && op.mappingKey.startsWith('aleo1')) {
+                                                address = op.mappingKey;
+                                                break;
+                                            }
+                                            if (op.key && op.key.startsWith('aleo1')) {
+                                                address = op.key;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Method 4: Check transaction metadata
                             if (!address) {
                                 if (tx.caller && tx.caller.startsWith('aleo1')) {
                                     address = tx.caller;
@@ -144,18 +161,26 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
                                     address = tx.sender;
                                 } else if (tx.address && tx.address.startsWith('aleo1')) {
                                     address = tx.address;
+                                } else if (tx.owner && tx.owner.startsWith('aleo1')) {
+                                    address = tx.owner;
                                 }
                             }
                             
-                            if (address) {
+                            if (address && address.length >= 58) {
                                 addresses.add(address);
                                 console.log(`[Discover] Found profile address: ${address} from ${functionName} transaction`);
+                            } else {
+                                console.warn(`[Discover] Could not extract address from transaction:`, tx);
                             }
                         });
+                    } else if (data.error) {
+                        console.warn(`[Discover] RPC error for ${functionName}:`, data.error);
                     }
+                } else {
+                    console.warn(`[Discover] Failed to fetch transactions for ${functionName}:`, response.status, response.statusText);
                 }
             } catch (e) {
-                console.warn(`Failed to get transactions for ${functionName}:`, e);
+                console.warn(`[Discover] Exception getting transactions for ${functionName}:`, e);
             }
         }
         

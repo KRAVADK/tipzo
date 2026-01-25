@@ -531,76 +531,93 @@ const Explore: React.FC = () => {
             <p className="font-medium line-clamp-2">{creator.bio || "No bio"}</p>
             
             <div className="mt-auto pt-4">
-              {isSearchMode && selectedCreatorForDonation?.id === creator.id ? (
-                // Show donation form only when this creator is selected
-                <div className="flex flex-col gap-3 relative">
-                  <button
-                    onClick={() => {
-                      setSelectedCreatorForDonation(null);
-                      setDonationAmount("1");
-                      setDonationMessage("");
-                    }}
-                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-400 hover:bg-red-500 border-2 border-black flex items-center justify-center shadow-neo-sm transition-colors"
-                    title="Close donation form"
-                  >
-                    <X size={14} className="text-white" />
-                  </button>
-                  <div className="space-y-2">
-                    <label className="font-bold text-sm">Donation Amount (ALEO)</label>
-                    <NeoInput 
-                      type="number" 
-                      step="0.01"
-                      min="0.01"
-                      value={donationAmount} 
-                      onChange={(e) => setDonationAmount(e.target.value)}
-                      placeholder="1.00"
-                      className="w-full text-lg font-bold border-2 border-black"
-                      autoFocus={false}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="font-bold text-sm">Message (Optional)</label>
-                    <NeoInput 
-                      type="text"
-                      value={donationMessage} 
-                      onChange={(e) => setDonationMessage(e.target.value)}
-                      placeholder="Add a message..."
-                      className="w-full border-2 border-black"
-                      maxLength={30}
-                    />
-                    <p className="text-xs text-gray-500">Max 30 characters</p>
-                  </div>
-                  <NeoButton 
-                    className="flex-1 flex items-center justify-center gap-2"
-                    onClick={() => handleDonate(creator)}
-                  >
-                    <DollarSign size={18} /> Donate
-                  </NeoButton>
-                </div>
-              ) : (
-                // Show view profile button in browse mode
-                <div className="flex gap-2">
-                  <NeoButton 
-                    className="flex-1 flex items-center justify-center gap-2"
-                    variant="secondary"
-                    onClick={() => {
-                      // Navigate to profile page
-                      navigate(`/profile/${creator.id}`);
-                    }}
-                  >
-                    <User size={18} /> View Profile
-                  </NeoButton>
-                  <NeoButton 
-                    className="flex items-center justify-center gap-2"
-                    onClick={() => {
-                      // Show donation form for this creator
-                      setSelectedCreatorForDonation(creator);
-                      setIsSearchMode(true);
-                    }}
-                  >
-                    <DollarSign size={18} />
-                  </NeoButton>
-                </div>
+              {/* Don't show donation buttons for own profile */}
+              {creator.id !== publicKey && (
+                <>
+                  {isSearchMode && selectedCreatorForDonation?.id === creator.id ? (
+                    // Show donation form only when this creator is selected
+                    <div className="flex flex-col gap-3 relative">
+                      <button
+                        onClick={() => {
+                          setSelectedCreatorForDonation(null);
+                          setDonationAmount("1");
+                          setDonationMessage("");
+                        }}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-400 hover:bg-red-500 border-2 border-black flex items-center justify-center shadow-neo-sm transition-colors"
+                        title="Close donation form"
+                      >
+                        <X size={14} className="text-white" />
+                      </button>
+                      <div className="space-y-2">
+                        <label className="font-bold text-sm">Donation Amount (ALEO)</label>
+                        <NeoInput 
+                          type="number" 
+                          step="0.01"
+                          min="0.01"
+                          value={donationAmount} 
+                          onChange={(e) => setDonationAmount(e.target.value)}
+                          placeholder="1.00"
+                          className="w-full text-lg font-bold border-2 border-black"
+                          autoFocus={false}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="font-bold text-sm">Message (Optional)</label>
+                        <NeoInput 
+                          type="text"
+                          value={donationMessage} 
+                          onChange={(e) => setDonationMessage(e.target.value)}
+                          placeholder="Add a message..."
+                          className="w-full border-2 border-black"
+                          maxLength={30}
+                        />
+                        <p className="text-xs text-gray-500">Max 30 characters</p>
+                      </div>
+                      <NeoButton 
+                        className="flex-1 flex items-center justify-center gap-2"
+                        onClick={() => handleDonate(creator)}
+                      >
+                        <DollarSign size={18} /> Donate
+                      </NeoButton>
+                    </div>
+                  ) : (
+                    // Show view profile button in browse mode
+                    <div className="flex gap-2">
+                      <NeoButton 
+                        className="flex-1 flex items-center justify-center gap-2"
+                        variant="secondary"
+                        onClick={() => {
+                          // Navigate to profile page
+                          navigate(`/profile/${creator.id}`);
+                        }}
+                      >
+                        <User size={18} /> View Profile
+                      </NeoButton>
+                      <NeoButton 
+                        className="flex items-center justify-center gap-2"
+                        onClick={() => {
+                          // Show donation form for this creator
+                          setSelectedCreatorForDonation(creator);
+                          setIsSearchMode(true);
+                        }}
+                      >
+                        <DollarSign size={18} />
+                      </NeoButton>
+                    </div>
+                  )}
+                </>
+              )}
+              {/* For own profile, only show View Profile button */}
+              {creator.id === publicKey && (
+                <NeoButton 
+                  className="w-full flex items-center justify-center gap-2"
+                  variant="secondary"
+                  onClick={() => {
+                    navigate(`/profile/${creator.id}`);
+                  }}
+                >
+                  <User size={18} /> View Profile
+                </NeoButton>
               )}
             </div>
           </NeoCard>
