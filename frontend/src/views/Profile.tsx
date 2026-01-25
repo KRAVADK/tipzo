@@ -128,7 +128,7 @@ const Profile: React.FC = () => {
         if (wallet.adapter && 'requestTransaction' in wallet.adapter) {
             // @ts-ignore
             await requestTransactionWithRetry(wallet.adapter, transaction);
-            alert("Profile update transaction sent! It may take a few minutes to appear.");
+            alert(`Profile ${existsOnChain ? 'updated' : 'created'} successfully!\n\nFunction: ${functionName}\nTransaction sent! It may take a few minutes to appear.`);
         }
 
       } catch (e) {
