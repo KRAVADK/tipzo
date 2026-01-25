@@ -6,6 +6,7 @@ import { useWalletRecords, RecordDonation } from '../hooks/useWalletRecords';
 import { PROGRAM_ID } from '../deployed_program';
 import { formatAddress, fieldToString } from '../utils/aleo';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
+import { getProfileFromChain, cacheProfile, addKnownProfileAddress } from '../utils/explorerAPI';
 
 const History: React.FC = () => {
   const { publicKey } = useWallet();
@@ -21,6 +22,47 @@ const History: React.FC = () => {
     const data = await fetchRecords(PROGRAM_ID);
     console.log("[History] Loaded records:", data.length, data);
     setRecords(data);
+    
+    // Automatically discover and cache profiles from donation records
+    // This ensures recipients and senders appear in Explore
+    const addressesToCheck = new Set<string>();
+    data.forEach(record => {
+      if (record.recipient) {
+        addressesToCheck.add(record.recipient);
+      }
+      if (record.sender) {
+        addressesToCheck.add(record.sender);
+      }
+    });
+    
+    // Fetch and cache profiles for discovered addresses
+    if (addressesToCheck.size > 0) {
+      console.log(`[History] Discovering ${addressesToCheck.size} profiles from donation records...`);
+      const addressArray = Array.from(addressesToCheck);
+      
+      // Fetch profiles in parallel (limit to avoid too many requests)
+      const profilePromises = addressArray.slice(0, 20).map(async (address) => {
+        try {
+          // Add to known profiles list first
+          addKnownProfileAddress(address);
+          
+          // Try to fetch and cache profile
+          const profile = await getProfileFromChain(address);
+          if (profile) {
+            cacheProfile(address, profile);
+            console.log(`[History] Discovered and cached profile for ${address}: ${profile.name}`);
+          }
+        } catch (e) {
+          console.warn(`[History] Failed to fetch profile for ${address}:`, e);
+        }
+      });
+      
+      await Promise.all(profilePromises);
+      
+      // Trigger Explore update
+      window.dispatchEvent(new CustomEvent('profileUpdated'));
+    }
+    
     setRefreshing(false);
   };
 
