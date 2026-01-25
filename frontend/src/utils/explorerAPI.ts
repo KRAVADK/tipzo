@@ -342,9 +342,13 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
         console.log("Raw profile data from API:", JSON.stringify(data, null, 2));
         
         // If profile exists, automatically add to known profiles list
-        // This ensures profiles are discoverable by all users
+        // This ensures profiles are discoverable by all users, even in anonymous mode
+        // This is critical for making profiles visible to everyone
         if (data) {
-            addKnownProfileAddress(address);
+            const wasNew = addKnownProfileAddress(address);
+            if (wasNew) {
+                console.log(`[Profile] New profile discovered: ${address} - added to global list`);
+            }
         }
         
         if (!data) {
