@@ -72,9 +72,9 @@ const Explore: React.FC = () => {
       // If we have very few profiles, try to discover more from blockchain transactions
       let addressArray = Array.from(knownAddresses);
       
-      // Always try to discover from blockchain if we have less than 10 profiles
+      // Always try to discover from blockchain if we have less than 20 profiles
       // This ensures new profiles are found even if RPC fails sometimes
-      if (addressArray.length < 10) {
+      if (addressArray.length < 20) {
         console.log("[Explore] Few profiles found locally, discovering from blockchain...");
         try {
           const { discoverProfileAddresses } = await import('../utils/explorerAPI');
@@ -87,18 +87,21 @@ const Explore: React.FC = () => {
               }
             });
             addressArray = Array.from(knownAddresses);
-            console.log(`[Explore] Discovered ${discoveredAddresses.length} additional profiles from blockchain`);
+            console.log(`[Explore] Discovered ${discoveredAddresses.length} total profile addresses (${discoveredAddresses.length - addressArray.length + knownAddresses.size} new from blockchain)`);
           } else {
-            console.log("[Explore] No additional profiles discovered from blockchain transactions");
+            console.log("[Explore] No additional profiles discovered from blockchain transactions, using known addresses from storage");
           }
         } catch (e) {
           console.warn("[Explore] Failed to discover profiles from blockchain:", e);
+          console.log("[Explore] Using known addresses from storage as fallback");
         }
       }
       
-      // Also check if we can get profiles from a shared seed list or known addresses
-      // This helps when RPC is unavailable
-      if (addressArray.length === 0) {
+      // If we still have very few profiles, try to verify all known addresses
+      // This helps when RPC is unavailable but we have addresses in storage
+      if (addressArray.length > 0 && addressArray.length < 5) {
+        console.log(`[Explore] Found ${addressArray.length} profiles. They will appear as more users create profiles or when you search for them.`);
+      } else if (addressArray.length === 0) {
         console.log("[Explore] No profiles found. They will appear as users create them or when you search for them.");
       }
       
