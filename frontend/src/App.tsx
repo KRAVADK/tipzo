@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { WalletProvider, useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { LeoWalletAdapter } from "@demox-labs/aleo-wallet-adapter-leo";
