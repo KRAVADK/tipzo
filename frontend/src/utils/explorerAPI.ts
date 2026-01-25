@@ -196,9 +196,11 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
             }
             
             if (!success) {
-                console.warn(`[Discover] All RPC endpoints failed for ${functionName}, trying alternative method...`);
-                // Alternative: Try to get profiles by checking known addresses from donation history
-                // This will be handled by the History component
+                console.warn(`[Discover] All RPC endpoints failed for ${functionName}`);
+                // Note: Profiles will still be discovered through:
+                // 1. Donation history (recipients and senders)
+                // 2. Manual search by address or nickname
+                // 3. When users create/update profiles (they're automatically added to the list)
             }
         }
         
