@@ -270,6 +270,8 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
 };
 
 // Helper function to cache profile in localStorage for nickname search
+// This function is called whenever a profile is found or created
+// It ensures profiles are available to all users through localStorage
 export const cacheProfile = (address: string, profile: { name: string; bio: string }, createdAt?: number) => {
     try {
         const cacheKey = `tipzo_profile_cache_${address}`;
@@ -300,9 +302,13 @@ export const cacheProfile = (address: string, profile: { name: string; bio: stri
             cachedAt: now,
             createdAt: finalCreatedAt // Store creation date for sorting
         }));
-        // Add to known profiles list
+        // Add to known profiles list - this is critical for profile discovery
+        // When a profile is cached, it's added to the global list that all users can see
         addKnownProfileAddress(address);
         console.log(`[Cache] Cached profile for ${address}:`, profile.name);
+        
+        // Dispatch event to notify other components that a new profile was discovered
+        window.dispatchEvent(new CustomEvent('profileDiscovered', { detail: { address, profile } }));
     } catch (e) {
         console.warn("Failed to cache profile:", e);
     }

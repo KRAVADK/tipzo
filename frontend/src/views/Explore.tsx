@@ -195,8 +195,15 @@ const Explore: React.FC = () => {
     };
     window.addEventListener('profileUpdated', handleProfileUpdate);
     
+    // Also listen for profile discovery events (when profiles are found and cached)
+    const handleProfileDiscovered = () => {
+      loadAllProfiles();
+    };
+    window.addEventListener('profileDiscovered', handleProfileDiscovered);
+    
     return () => {
       window.removeEventListener('profileUpdated', handleProfileUpdate);
+      window.removeEventListener('profileDiscovered', handleProfileDiscovered);
     };
   }, []); // Only run on mount
 
