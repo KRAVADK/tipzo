@@ -59,57 +59,13 @@ export const addKnownProfileAddress = (address: string) => {
     }
 };
 
-// Helper function to discover profile addresses using Provable Explorer API
-// This tries to get transactions from the explorer API to find all profile addresses
+// Helper function to verify known profile addresses exist on chain
+// This only verifies addresses that are already in localStorage, no automatic discovery
 export const discoverProfileAddresses = async (): Promise<string[]> => {
     const addresses = new Set<string>();
     
     try {
-        // Try to get transactions from Provable Explorer API
-        // Format: https://api.explorer.provable.com/v1/testnet/program/{programId}/transactions
-        const transactionsUrl = `https://api.explorer.provable.com/v1/testnet/program/${PROGRAM_ID}/transactions`;
-        
-        console.log(`[Discover] Fetching transactions from Provable Explorer: ${transactionsUrl}`);
-        
-        try {
-            const response = await fetch(transactionsUrl);
-            if (response.ok) {
-                const data = await response.json();
-                console.log(`[Discover] Received data from Provable Explorer:`, data);
-                
-                // Try to parse transactions and extract addresses
-                if (Array.isArray(data)) {
-                    data.forEach((tx: any) => {
-                        // Look for create_profile or update_profile transactions
-                        if (tx.function === 'create_profile' || tx.function === 'update_profile') {
-                            // Try to extract address from transaction
-                            // The address is usually in the transaction metadata or finalize operations
-                            if (tx.caller && tx.caller.startsWith('aleo1')) {
-                                addresses.add(tx.caller);
-                            } else if (tx.sender && tx.sender.startsWith('aleo1')) {
-                                addresses.add(tx.sender);
-                            } else if (tx.address && tx.address.startsWith('aleo1')) {
-                                addresses.add(tx.address);
-                            }
-                        }
-                    });
-                } else if (data.transactions && Array.isArray(data.transactions)) {
-                    data.transactions.forEach((tx: any) => {
-                        if (tx.function === 'create_profile' || tx.function === 'update_profile') {
-                            if (tx.caller && tx.caller.startsWith('aleo1')) {
-                                addresses.add(tx.caller);
-                            }
-                        }
-                    });
-                }
-            } else {
-                console.warn(`[Discover] Provable Explorer API returned ${response.status}: ${response.statusText}`);
-            }
-        } catch (e) {
-            console.warn(`[Discover] Failed to fetch from Provable Explorer API:`, e);
-        }
-        
-        // Fallback: Get all addresses from known profiles list and cache
+        // Only get addresses from known profiles list and cache (no API discovery)
         const knownAddresses = getKnownProfileAddresses();
         const allKeys = Object.keys(localStorage);
         const cacheKeys = allKeys.filter(key => key.startsWith("tipzo_profile_cache_"));
@@ -130,32 +86,34 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
             }
         }
         
-        // Verify known addresses exist on chain
-        console.log(`[Discover] Verifying ${addressesToCheck.size} known addresses...`);
-        
-        const checkPromises = Array.from(addressesToCheck).slice(0, 50).map(async (address) => {
-            try {
-                const profile = await getProfileFromChain(address);
-                if (profile) {
-                    cacheProfile(address, profile);
-                    return address;
+        // Verify known addresses exist on chain (only if we have addresses to check)
+        if (addressesToCheck.size > 0) {
+            console.log(`[Discover] Verifying ${addressesToCheck.size} known addresses...`);
+            
+            const checkPromises = Array.from(addressesToCheck).slice(0, 50).map(async (address) => {
+                try {
+                    const profile = await getProfileFromChain(address);
+                    if (profile) {
+                        cacheProfile(address, profile);
+                        return address;
+                    }
+                    return null;
+                } catch (e) {
+                    return null;
                 }
-                return null;
-            } catch (e) {
-                return null;
-            }
-        });
+            });
+            
+            const results = await Promise.all(checkPromises);
+            const validAddresses = results.filter((addr): addr is string => addr !== null);
+            
+            validAddresses.forEach(addr => addresses.add(addr));
+        }
         
-        const results = await Promise.all(checkPromises);
-        const validAddresses = results.filter((addr): addr is string => addr !== null);
-        
-        validAddresses.forEach(addr => addresses.add(addr));
-        
-        console.log(`[Discover] Found ${addresses.size} total profile addresses`);
+        console.log(`[Discover] Found ${addresses.size} verified profile addresses`);
         return Array.from(addresses);
         
     } catch (e) {
-        console.warn("Failed to discover profile addresses:", e);
+        console.warn("Failed to verify profile addresses:", e);
         return [];
     }
 };
