@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NeoCard, NeoButton, NeoInput, NeoBadge, WalletRequiredModal } from '../components/NeoComponents';
 import { Creator } from '../types';
-import { Search, DollarSign, Loader2, User, ExternalLink, X } from 'lucide-react';
+import { Search, DollarSign, Loader2, User, X } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
@@ -72,7 +72,6 @@ const Explore: React.FC = () => {
       }
 
       setIsSearchMode(true);
-      setSelectedCreatorForDonation(creator);
 
       // Check if it's an address search
       if (trimmedSearch.startsWith("aleo1") && trimmedSearch.length >= 10) {
