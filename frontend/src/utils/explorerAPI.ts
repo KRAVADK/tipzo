@@ -31,12 +31,83 @@ export interface UserProfile {
 
 const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
 
+// Public profiles registry URL (can be hosted on GitHub, Netlify, or any static hosting)
+// Format: JSON array of profile addresses: ["aleo1...", "aleo1...", ...]
+// Update this URL to match your repository
+const PUBLIC_PROFILES_REGISTRY_URL = "https://raw.githubusercontent.com/barbos001/tipzo/main/public-profiles.json";
+
+// Fallback URL if GitHub doesn't work (Netlify or other hosting)
+const PUBLIC_PROFILES_REGISTRY_FALLBACK = "https://tipzo.netlify.app/public-profiles.json";
+
+// Get all profile addresses from public registry (GitHub/Netlify or local public folder)
+export const getPublicProfilesRegistry = async (): Promise<string[]> => {
+    const urls = [
+        // Try local public folder first (works after build)
+        '/public-profiles.json',
+        // Then try GitHub
+        PUBLIC_PROFILES_REGISTRY_URL,
+        // Then try Netlify fallback
+        PUBLIC_PROFILES_REGISTRY_FALLBACK
+    ];
+    
+    for (const url of urls) {
+        try {
+            const response = await fetch(url, {
+                cache: 'no-cache',
+                headers: {
+                    'Accept': 'application/json',
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                // Handle different formats
+                let addresses: string[] = [];
+                
+                if (Array.isArray(data)) {
+                    // Direct array of addresses
+                    addresses = data.filter((addr): addr is string => 
+                        typeof addr === 'string' && addr.startsWith('aleo1')
+                    );
+                } else if (data && Array.isArray(data.profiles)) {
+                    // Object with profiles array
+                    addresses = data.profiles.filter((addr: any): addr is string => 
+                        typeof addr === 'string' && addr.startsWith('aleo1')
+                    );
+                } else if (data && Array.isArray(data.addresses)) {
+                    // Object with addresses array
+                    addresses = data.addresses.filter((addr: any): addr is string => 
+                        typeof addr === 'string' && addr.startsWith('aleo1')
+                    );
+                }
+                
+                if (addresses.length > 0) {
+                    console.log(`[Registry] Loaded ${addresses.length} profiles from ${url}`);
+                    return addresses;
+                }
+            }
+        } catch (error) {
+            // Silently continue to next URL
+            continue;
+        }
+    }
+    
+    // If all URLs failed, return empty array (don't log error - it's normal if file doesn't exist yet)
+    return [];
+};
+
 // Get total number of registered profiles from blockchain
 export const getProfileCount = async (): Promise<number> => {
     try {
         const url = `${MAPPING_URL}/${PROGRAM_ID}/mapping/profile_count/0`;
         const response = await fetch(url);
         if (!response.ok) {
+            // 404 is normal for new contracts where no profiles have been created yet
+            if (response.status === 404) {
+                console.log("[Registry] Profile count mapping not initialized yet (no profiles created)");
+                return 0;
+            }
             console.warn("Failed to get profile count:", response.statusText);
             return 0;
         }
@@ -64,6 +135,10 @@ export const getProfileAddressAtIndex = async (index: number): Promise<string | 
         const url = `${MAPPING_URL}/${PROGRAM_ID}/mapping/active_profiles/${index}`;
         const response = await fetch(url);
         if (!response.ok) {
+            // 404 is normal if index doesn't exist (no profile at that index)
+            if (response.status === 404) {
+                return null;
+            }
             console.warn(`Failed to get profile at index ${index}:`, response.statusText);
             return null;
         }
@@ -271,11 +346,26 @@ export const cacheProfile = (address: string, profile: { name: string; bio: stri
 
 export const getProfileFromChain = async (address: string): Promise<UserProfile | null> => {
     try {
+        // Try new contract first (v6)
         const url = `${MAPPING_URL}/${PROGRAM_ID}/mapping/profiles/${address}`;
         console.log(`Fetching profile from: ${url}`);
         
-        const response = await fetch(url);
+        let response = await fetch(url);
+        
+        // If not found in v6, try old contract v5 as fallback
+        if (!response.ok && response.status === 404) {
+            const oldProgramId = "tipzo_app_v5.aleo";
+            const oldUrl = `${MAPPING_URL}/${oldProgramId}/mapping/profiles/${address}`;
+            console.log(`Profile not found in v6, trying old contract: ${oldUrl}`);
+            response = await fetch(oldUrl);
+        }
+        
         if (!response.ok) {
+            // 404 is normal if profile doesn't exist yet
+            if (response.status === 404) {
+                console.log(`Profile not found for address: ${address.slice(0, 10)}...`);
+                return null;
+            }
             console.warn("Profile not found or error fetching:", response.statusText);
             return null;
         }
