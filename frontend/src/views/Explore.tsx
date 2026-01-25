@@ -72,34 +72,20 @@ const Explore: React.FC = () => {
       // If we have very few profiles, try to discover more from blockchain transactions
       let addressArray = Array.from(knownAddresses);
       
-      // Always try to discover from blockchain if we have less than 10 profiles
-      // This ensures new profiles are found even if RPC fails sometimes
-      if (addressArray.length < 10) {
-        console.log("[Explore] Few profiles found locally, discovering from blockchain...");
-        try {
-          const { discoverProfileAddresses } = await import('../utils/explorerAPI');
-          const discoveredAddresses = await discoverProfileAddresses();
-          if (discoveredAddresses.length > 0) {
-            discoveredAddresses.forEach(addr => {
-              knownAddresses.add(addr);
-              if (!cacheData.has(addr)) {
-                cacheData.set(addr, { createdAt: Date.now() });
-              }
-            });
-            addressArray = Array.from(knownAddresses);
-            console.log(`[Explore] Discovered ${discoveredAddresses.length} additional profiles from blockchain`);
-          } else {
-            console.log("[Explore] No additional profiles discovered from blockchain transactions");
-          }
-        } catch (e) {
-          console.warn("[Explore] Failed to discover profiles from blockchain:", e);
-        }
-      }
+      // Note: RPC-based discovery is disabled due to CORS issues
+      // Profiles are discovered through:
+      // 1. Automatic addition when created/updated
+      // 2. Donation history (recipients and senders)
+      // 3. Manual search by address or nickname
+      // 4. When users interact with each other
       
-      // Also check if we can get profiles from a shared seed list or known addresses
-      // This helps when RPC is unavailable
       if (addressArray.length === 0) {
-        console.log("[Explore] No profiles found. They will appear as users create them or when you search for them.");
+        console.log("[Explore] No profiles found locally. Profiles will appear when:");
+        console.log("  - You create or update your profile");
+        console.log("  - You search for a profile by address or nickname");
+        console.log("  - You send or receive donations (recipients/senders are auto-discovered)");
+      } else {
+        console.log(`[Explore] Found ${addressArray.length} profiles from cache and donation history`);
       }
       
       // Fetch and verify all known profiles from blockchain
