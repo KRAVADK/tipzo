@@ -312,6 +312,7 @@ const Explore: React.FC = () => {
             setSearchError(null);
             
             // Trigger profile list update so all users see this profile
+            // This will reload all profiles including the newly discovered one
             window.dispatchEvent(new CustomEvent('profileUpdated'));
           } else {
             // Profile doesn't exist on chain
@@ -330,22 +331,22 @@ const Explore: React.FC = () => {
             for (const address of foundAddresses) {
               try {
                 const profile = await getProfileFromChain(address);
-                if (profile) {
-                  // Cache profile (automatically adds to global list)
-                  cacheProfile(address, profile);
-                  
-                  const profileName = profile.name && profile.name.trim() ? profile.name : "Anonymous";
-                  newCreators.push({
-                    id: address,
-                    name: profileName,
-                    handle: address.slice(0, 10) + "...",
-                    category: 'User',
-                    avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
-                    bio: profile.bio || "",
-                    verified: false,
-                    color: 'white'
-                  });
-                }
+                    if (profile) {
+                      // Cache profile (automatically adds to global list and triggers profileCached event)
+                      cacheProfile(address, profile);
+                      
+                      const profileName = profile.name && profile.name.trim() ? profile.name : "Anonymous";
+                      newCreators.push({
+                        id: address,
+                        name: profileName,
+                        handle: address.slice(0, 10) + "...",
+                        category: 'User',
+                        avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
+                        bio: profile.bio || "",
+                        verified: false,
+                        color: 'white'
+                      });
+                    }
               } catch (e) {
                 console.warn(`Failed to fetch profile for ${address}:`, e);
               }
