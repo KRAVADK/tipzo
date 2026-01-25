@@ -65,22 +65,58 @@ export const addKnownProfileAddress = (address: string) => {
     }
 };
 
-// Helper function to discover profile addresses
-// Since RPC endpoints have CORS issues, we use alternative methods:
-// 1. Profiles are automatically added when created/updated
-// 2. Profiles are discovered from donation history
-// 3. Profiles can be found through search
-// This function now just returns empty array - discovery happens through other means
+// Helper function to discover profile addresses by trying to fetch profiles for known addresses
+// Since RPC endpoints have CORS issues, we try to discover profiles by checking
+// addresses that might have profiles (from donation history, search, etc.)
 export const discoverProfileAddresses = async (): Promise<string[]> => {
-    // RPC endpoints don't work due to CORS restrictions
-    // Profiles are discovered through:
-    // 1. Automatic addition when created/updated (via cacheProfile)
-    // 2. Donation history (recipients and senders)
-    // 3. Manual search by address or nickname
-    // 4. When users interact with each other
+    const addresses = new Set<string>();
     
-    console.log("[Discover] Profile discovery via RPC is disabled due to CORS. Profiles are discovered through other methods.");
-    return [];
+    // Get all addresses from known profiles list and cache
+    const knownAddresses = getKnownProfileAddresses();
+    const allKeys = Object.keys(localStorage);
+    const cacheKeys = allKeys.filter(key => key.startsWith("tipzo_profile_cache_"));
+    
+    // Collect all known addresses
+    const addressesToCheck = new Set<string>(knownAddresses);
+    for (const key of cacheKeys) {
+        try {
+            const cached = localStorage.getItem(key);
+            if (cached) {
+                const profile = JSON.parse(cached);
+                if (profile.address) {
+                    addressesToCheck.add(profile.address);
+                }
+            }
+        } catch (e) {
+            // Ignore
+        }
+    }
+    
+    // Try to fetch profiles for all known addresses to verify they exist
+    // This helps discover profiles that were added to the list but not yet verified
+    console.log(`[Discover] Checking ${addressesToCheck.size} known addresses for profiles...`);
+    
+    const checkPromises = Array.from(addressesToCheck).slice(0, 50).map(async (address) => {
+        try {
+            const profile = await getProfileFromChain(address);
+            if (profile) {
+                // Profile exists on chain - add to known list
+                addKnownProfileAddress(address);
+                return address;
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    });
+    
+    const results = await Promise.all(checkPromises);
+    const validAddresses = results.filter((addr): addr is string => addr !== null);
+    
+    validAddresses.forEach(addr => addresses.add(addr));
+    
+    console.log(`[Discover] Verified ${addresses.size} profiles from known addresses`);
+    return Array.from(addresses);
 };
 
 // Helper function to cache profile in localStorage for nickname search
