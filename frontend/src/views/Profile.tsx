@@ -3,7 +3,7 @@ import { NeoCard, NeoButton, NeoInput, NeoTextArea, WalletRequiredModal } from '
 import { UserProfile } from '../utils/explorerAPI';
 import { Save, Wallet, Loader2, DollarSign, X } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
-import { getProfileFromChain, cacheProfile } from '../utils/explorerAPI';
+import { getProfileFromChain, cacheProfile, addKnownProfileAddress } from '../utils/explorerAPI';
 import { stringToField } from '../utils/aleo';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 import { WalletAdapterNetwork } from '@demox-labs/aleo-wallet-adapter-base';
@@ -44,18 +44,45 @@ const Profile: React.FC = () => {
             const addressToFetch = profileAddress || publicKey;
             if (!addressToFetch) return;
             
+            // First, try to get from cache (fast, works offline)
+            const cacheKey = `tipzo_profile_cache_${addressToFetch}`;
+            const cached = localStorage.getItem(cacheKey);
+            
+            if (cached) {
+              try {
+                const cachedData = JSON.parse(cached);
+                if (cachedData.name || cachedData.bio) {
+                  console.log("[Profile] Loading from cache:", cachedData);
+                  setProfile({
+                    name: cachedData.name || '',
+                    bio: cachedData.bio || '',
+                    handle: addressToFetch
+                  });
+                  setExistsOnChain(true);
+                  setLoading(false);
+                  // Still try to fetch from chain in background to get latest data
+                }
+              } catch (e) {
+                console.warn("[Profile] Failed to parse cached profile:", e);
+              }
+            }
+            
+            // Try to fetch from chain (may be slow or fail)
             const data = await getProfileFromChain(addressToFetch);
             if (data) {
+                console.log("[Profile] Loaded from chain:", data);
                 setProfile({
                     name: data.name,
                     bio: data.bio,
                     handle: addressToFetch
                 });
                 setExistsOnChain(true);
-            } else {
+            } else if (!cached) {
+                // No data from chain and no cache
                 setProfile(prev => ({ ...prev, handle: addressToFetch || '' }));
                 setExistsOnChain(false);
             }
+            // If we have cache but no chain data, keep cache data (already set above)
         } catch (e) {
             console.error("Error fetching profile", e);
         } finally {
@@ -149,16 +176,44 @@ const Profile: React.FC = () => {
             });
             
             if (txId) {
-                // Cache the profile immediately for nickname search (optimistic update)
-                // Use current time as creation date for new profiles
+                // Update local state immediately
+                setProfile(prev => ({
+                    ...prev,
+                    name: name,
+                    bio: bio
+                }));
+                setExistsOnChain(true);
+                
+                // Cache the profile IMMEDIATELY - this is critical for search to work
                 if (publicKey) {
-                    cacheProfile(publicKey, {
+                    const profileData = {
                         name: name,
                         bio: bio
-                    }, existsOnChain ? undefined : Date.now());
+                    };
+                    // Cache with skipEvent=false to trigger profileCached event
+                    cacheProfile(publicKey, profileData, existsOnChain ? undefined : Date.now(), false);
+                    
+                    // Add to known profiles list (for local discovery)
+                    addKnownProfileAddress(publicKey);
+                    
+                    // Verify it was cached
+                    const cacheKey = `tipzo_profile_cache_${publicKey}`;
+                    const verifyCache = localStorage.getItem(cacheKey);
+                    console.log("[Profile] Profile saved and cached:", { 
+                        name, 
+                        bio, 
+                        address: publicKey,
+                        cached: !!verifyCache,
+                        cacheData: verifyCache ? JSON.parse(verifyCache) : null
+                    });
+                    
+                    // CRITICAL: Dispatch profileUpdated event to refresh Explore
+                    // This ensures the updated profile appears in Explore immediately
+                    window.dispatchEvent(new CustomEvent('profileUpdated'));
+                    console.log("[Profile] Dispatched profileUpdated event to refresh Explore");
                 }
                 
-                alert(`Profile ${existsOnChain ? 'updated' : 'created'} successfully!\n\nFunction: ${functionName}\nTransaction: ${txId.slice(0, 8)}...\n\nIt may take a few minutes to appear in Explore.`);
+                alert(`Profile ${existsOnChain ? 'updated' : 'created'} successfully!`);
             }
         }
 
@@ -237,6 +292,8 @@ const Profile: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, 1500));
         
         // STEP 2: Create donation record
+        // send_donation(recipient, amount, message, timestamp) — contract order
+        // Note: sender is automatically self.caller in the contract, don't pass it
         const messageField = stringToField(donationMessage || "");
         const timestamp = Math.floor(Date.now() / 1000);
         
@@ -249,11 +306,10 @@ const Profile: React.FC = () => {
                     program: String(PROGRAM_ID),
                     functionName: "send_donation",
                     inputs: [
-                        String(publicKey),
-                        String(profileAddress),
-                        String(amountMicro) + "u64",
-                        String(messageField),
-                        String(timestamp) + "u64"
+                        String(profileAddress),      // recipient (private)
+                        String(amountMicro) + "u64", // amount (private)
+                        String(messageField),        // message (private)
+                        String(timestamp) + "u64"    // timestamp (public)
                     ]
                 }
             ]

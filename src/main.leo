@@ -31,7 +31,9 @@ program tipzo_app_v6.aleo {
         timestamp: u64,
     }
 
-    // Profiles mapping (public - only nickname/bio, no donation info)
+    // Profiles mapping - PUBLIC and UNENCRYPTED
+    // All profile data (name, bio) is stored publicly on blockchain
+    // Anyone can read any profile without encryption or restrictions
     mapping profiles: address => ProfileInfo;
     
     // Public registry of active profiles - indexed list for discovery
