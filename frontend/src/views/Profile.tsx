@@ -154,6 +154,8 @@ const Profile: React.FC = () => {
                     name: name,
                     bio: bio
                 });
+                // Dispatch event to update Explore page
+                window.dispatchEvent(new CustomEvent('profileUpdated'));
             }
             
             alert(`Profile ${existsOnChain ? 'updated' : 'created'} successfully!\n\nFunction: ${functionName}\nTransaction sent! It may take a few minutes to appear.`);
