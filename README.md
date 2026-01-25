@@ -126,8 +126,6 @@ tipzo/
 
 ## Deployment
 
-See `DEPLOY_INSTRUCTIONS.md` for detailed deployment instructions.
-
 The contract is currently deployed on Aleo Testnet:
 - **Program ID**: `tipzo_app_v5.aleo`
 - **Network**: Testnet
