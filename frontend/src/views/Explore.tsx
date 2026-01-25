@@ -69,29 +69,8 @@ const Explore: React.FC = () => {
         console.warn("Failed to get known profiles list:", e);
       }
       
-      // If we have very few profiles, try to discover more from blockchain transactions
+      // Convert to array for processing
       let addressArray = Array.from(knownAddresses);
-      
-      // Try to discover more profiles by verifying known addresses
-      // This helps when profiles were added to the list but not yet loaded
-      if (addressArray.length < 10) {
-        try {
-          const { discoverProfileAddresses } = await import('../utils/explorerAPI');
-          const discoveredAddresses = await discoverProfileAddresses();
-          if (discoveredAddresses.length > 0) {
-            discoveredAddresses.forEach(addr => {
-              knownAddresses.add(addr);
-              if (!cacheData.has(addr)) {
-                cacheData.set(addr, { createdAt: Date.now() });
-              }
-            });
-            addressArray = Array.from(knownAddresses);
-            console.log(`[Explore] Discovered ${discoveredAddresses.length} additional profiles from verification`);
-          }
-        } catch (e) {
-          console.warn("[Explore] Failed to discover profiles:", e);
-        }
-      }
       
       if (addressArray.length === 0) {
         console.log("[Explore] No profiles found locally. Profiles will appear when:");
@@ -161,7 +140,16 @@ const Explore: React.FC = () => {
 
   // Load all profiles on component mount and when profile is created
   useEffect(() => {
+    let debounceTimer: NodeJS.Timeout | null = null;
+    let isReloading = false;
+    
     const loadAllProfiles = async () => {
+      // Prevent multiple simultaneous reloads
+      if (isReloading) {
+        return;
+      }
+      
+      isReloading = true;
       setLoading(true);
       try {
         const profiles = await getAllCachedProfiles();
@@ -180,28 +168,32 @@ const Explore: React.FC = () => {
         console.error("Failed to load profiles:", e);
       } finally {
         setLoading(false);
+        isReloading = false;
       }
     };
     
     // Always load all profiles on mount
     loadAllProfiles();
 
-    // Listen for profile creation/update events
-    const handleProfileUpdate = () => {
-      loadAllProfiles();
+    // Debounced handler for profile events (prevents too frequent reloads)
+    const handleProfileEvent = () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      debounceTimer = setTimeout(() => {
+        loadAllProfiles();
+      }, 500); // Wait 500ms before reloading
     };
     
-    // Listen for profile cached events (when profiles are discovered)
-    const handleProfileCached = () => {
-      loadAllProfiles();
-    };
-    
-    window.addEventListener('profileUpdated', handleProfileUpdate);
-    window.addEventListener('profileCached', handleProfileCached);
+    window.addEventListener('profileUpdated', handleProfileEvent);
+    window.addEventListener('profileCached', handleProfileEvent);
     
     return () => {
-      window.removeEventListener('profileUpdated', handleProfileUpdate);
-      window.removeEventListener('profileCached', handleProfileCached);
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      window.removeEventListener('profileUpdated', handleProfileEvent);
+      window.removeEventListener('profileCached', handleProfileEvent);
     };
   }, []); // Only run on mount
 
