@@ -381,8 +381,15 @@ const Explore: React.FC = () => {
   }, [searchTerm]);
 
   const handleDonate = async (creator: Creator) => {
+    // Check if wallet is connected before allowing donation
     if (!wallet || !publicKey) {
         setShowWalletModal(true);
+        return;
+    }
+    
+    // Prevent self-donation
+    if (creator.id === publicKey) {
+        alert("You cannot donate to yourself!");
         return;
     }
 
@@ -604,16 +611,21 @@ const Explore: React.FC = () => {
                       >
                         <User size={18} /> View Profile
                       </NeoButton>
-                      <NeoButton 
-                        className="flex items-center justify-center gap-2"
-                        onClick={() => {
-                          // Show donation form for this creator
-                          setSelectedCreatorForDonation(creator);
-                          setIsSearchMode(true);
-                        }}
-                      >
-                        <DollarSign size={18} />
-                      </NeoButton>
+                  <NeoButton 
+                    className="flex items-center justify-center gap-2"
+                    onClick={() => {
+                      // Check if wallet is connected before showing donation form
+                      if (!wallet || !publicKey) {
+                        setShowWalletModal(true);
+                        return;
+                      }
+                      // Show donation form for this creator
+                      setSelectedCreatorForDonation(creator);
+                      setIsSearchMode(true);
+                    }}
+                  >
+                    <DollarSign size={18} />
+                  </NeoButton>
                     </div>
                   )}
                 </>

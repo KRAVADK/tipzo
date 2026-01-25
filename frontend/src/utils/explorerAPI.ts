@@ -30,6 +30,7 @@ export interface UserProfile {
 }
 
 const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
+const EXPLORER_API_BASE = "https://api.explorer.provable.com/v1/testnet";
 // Try multiple RPC endpoints for reliability
 const ALEO_RPC_URLS = [
     "https://api.testnet.aleo.org/v1",
@@ -65,10 +66,33 @@ export const addKnownProfileAddress = (address: string) => {
     }
 };
 
+// Alternative: Try to get profile addresses from Provable Explorer API
+// Since RPC might not work, we'll use a different approach - check known addresses
+// or use a seed list that gets populated as profiles are discovered
+const getKnownProfileAddressesFromStorage = (): string[] => {
+    try {
+        // Get from global list
+        const knownList = localStorage.getItem('tipzo_known_profiles');
+        if (knownList) {
+            return JSON.parse(knownList);
+        }
+        return [];
+    } catch (e) {
+        console.warn("Failed to get known profiles from storage:", e);
+        return [];
+    }
+};
+
 // Helper function to discover profile addresses by scanning transactions
 // This uses Aleo RPC to find all addresses that created or updated profiles
+// Falls back to known addresses from storage if RPC fails
 export const discoverProfileAddresses = async (): Promise<string[]> => {
     const addresses = new Set<string>();
+    
+    // First, add all known addresses from storage (these are profiles that have been discovered)
+    const knownAddresses = getKnownProfileAddressesFromStorage();
+    knownAddresses.forEach(addr => addresses.add(addr));
+    console.log(`[Discover] Starting with ${knownAddresses.length} known addresses from storage`);
     
     try {
         // Try to get transactions for create_profile and update_profile using RPC
@@ -196,18 +220,15 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
             }
             
             if (!success) {
-                console.warn(`[Discover] All RPC endpoints failed for ${functionName}`);
-                // Note: Profiles will still be discovered through:
-                // 1. Donation history (recipients and senders)
-                // 2. Manual search by address or nickname
-                // 3. When users create/update profiles (they're automatically added to the list)
+                console.warn(`[Discover] All RPC endpoints failed for ${functionName}, using known addresses from storage`);
             }
         }
         
-        console.log(`[Discover] Discovered ${addresses.size} profile addresses from blockchain`);
+        console.log(`[Discover] Discovered ${addresses.size} total profile addresses (${addresses.size - knownAddresses.length} new from blockchain)`);
         
     } catch (e) {
         console.warn("Failed to discover profile addresses:", e);
+        console.log(`[Discover] Using ${knownAddresses.length} known addresses from storage as fallback`);
     }
     
     return Array.from(addresses);
