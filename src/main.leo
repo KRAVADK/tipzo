@@ -1,7 +1,7 @@
-program tipzo_app_v5.aleo {
+program tipzo_app_v6.aleo {
     // This is the constructor for the program.
     // It is called when the program is deployed.
-    // Version 5: Fully private donations - no public mappings
+    // Version 6: Public profile registry - profiles are automatically registered and discoverable
     @noupgrade
     async constructor() {}
 
@@ -33,6 +33,15 @@ program tipzo_app_v5.aleo {
 
     // Profiles mapping (public - only nickname/bio, no donation info)
     mapping profiles: address => ProfileInfo;
+    
+    // Public registry of active profiles - indexed list for discovery
+    mapping active_profiles: u64 => address;
+    
+    // Counter for total number of registered profiles
+    mapping profile_count: u64 => u64;
+    
+    // Track which addresses are already registered (to avoid duplicates)
+    mapping is_registered: address => bool;
 
     // Send donation - FULLY PRIVATE transition
     // No public parameters except timestamp (for ordering)
@@ -72,6 +81,7 @@ program tipzo_app_v5.aleo {
     }
 
     // Create or update profile
+    // Automatically registers profile in public registry if it's new
     async transition create_profile(public name: field, public bio: field) -> Future {
         return finalize_create_profile(self.caller, name, bio);
     }
@@ -82,9 +92,29 @@ program tipzo_app_v5.aleo {
             bio: bio
         };
         Mapping::set(profiles, user, info);
+        
+        // Check if profile is already registered
+        let registered: bool = Mapping::get(is_registered, user);
+        
+        // Only register in public list if not already registered
+        if (!registered) {
+            // Get current profile count
+            let count_key: u64 = 0u64;
+            let current_count: u64 = Mapping::get(profile_count, count_key);
+            
+            // Add user to active_profiles at index = current_count
+            Mapping::set(active_profiles, current_count, user);
+            
+            // Mark as registered
+            Mapping::set(is_registered, user, true);
+            
+            // Increment profile count
+            Mapping::set(profile_count, count_key, current_count + 1u64);
+        }
     }
 
     // Update profile
+    // Updates existing profile (doesn't add to registry if already exists)
     async transition update_profile(public name: field, public bio: field) -> Future {
         return finalize_update_profile(self.caller, name, bio);
     }
@@ -95,11 +125,8 @@ program tipzo_app_v5.aleo {
             bio: bio
         };
         Mapping::set(profiles, user, info);
-        // Visibility is stored separately, so it's preserved automatically
+        // Profile is already in registry from create_profile, so no need to add again
     }
-
-    // Note: Profile visibility (is_public) is managed in localStorage on frontend
-    // This allows users to control visibility without blockchain transactions
 
     // View function to read profile from mapping (public, async for mapping access)
     async transition get_profile(public user_address: address) -> Future {
@@ -110,5 +137,26 @@ program tipzo_app_v5.aleo {
         let profile: ProfileInfo = Mapping::get(profiles, user_address);
         // Note: In Leo, we can't directly return from finalize, but the profile is accessible
         // The frontend will need to read it from the transaction output
+    }
+    
+    // View function to get total number of registered profiles
+    async transition get_profile_count() -> Future {
+        return finalize_get_profile_count();
+    }
+    
+    async function finalize_get_profile_count() {
+        let count_key: u64 = 0u64;
+        let count: u64 = Mapping::get(profile_count, count_key);
+        // Count is accessible via transaction output
+    }
+    
+    // View function to get profile address by index
+    async transition get_profile_at_index(public index: u64) -> Future {
+        return finalize_get_profile_at_index(index);
+    }
+    
+    async function finalize_get_profile_at_index(index: u64) {
+        let profile_address: address = Mapping::get(active_profiles, index);
+        // Address is accessible via transaction output
     }
 }

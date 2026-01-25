@@ -7,7 +7,7 @@ import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
 import { stringToField } from '../utils/aleo';
-import { getProfileFromChain, cacheProfile } from '../utils/explorerAPI';
+import { getProfileFromChain, cacheProfile, getAllRegisteredProfiles } from '../utils/explorerAPI';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 
 const Explore: React.FC = () => {
@@ -24,14 +24,18 @@ const Explore: React.FC = () => {
 
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  // Helper function to get all known profiles and verify on blockchain
+  // Helper function to get all registered profiles from blockchain
   const getAllCachedProfiles = async (): Promise<Creator[]> => {
     const profilesList: Creator[] = [];
     try {
-      // Get all known profile addresses (from cache and known list)
+      // First, get all registered profiles from blockchain
+      console.log("[Explore] Fetching registered profiles from blockchain...");
+      const registeredAddresses = await getAllRegisteredProfiles();
+      
+      // Also get cached profiles from localStorage (for backward compatibility)
       const allKeys = Object.keys(localStorage);
       const cacheKeys = allKeys.filter(key => key.startsWith("tipzo_profile_cache_"));
-      const knownAddresses = new Set<string>();
+      const knownAddresses = new Set<string>(registeredAddresses);
       const cacheData = new Map<string, { createdAt: number }>();
       
       // Add addresses from cache and store creation dates
@@ -52,7 +56,7 @@ const Explore: React.FC = () => {
         }
       }
       
-      // Get known addresses from global list
+      // Get known addresses from global list (for backward compatibility)
       try {
         const knownList = localStorage.getItem('tipzo_known_profiles');
         if (knownList) {
@@ -73,21 +77,13 @@ const Explore: React.FC = () => {
       let addressArray = Array.from(knownAddresses);
       
       if (addressArray.length === 0) {
-        console.log("[Explore] No profiles found locally. Profiles will appear when:");
-        console.log("  - You create or update your profile");
-        console.log("  - You search for a profile by address or nickname");
-        console.log("  - You send or receive donations (recipients/senders are auto-discovered)");
+        console.log("[Explore] No profiles found. Profiles will appear when users create them.");
       } else {
-        console.log(`[Explore] Found ${addressArray.length} profiles from cache and donation history`);
+        console.log(`[Explore] Found ${addressArray.length} profiles (${registeredAddresses.length} from blockchain registry)`);
       }
       
-      // Fetch and verify all known profiles from blockchain
-      console.log(`[Explore] Loading ${addressArray.length} known profiles from blockchain...`);
-      
-      // If no profiles found locally, try to discover from shared storage or seed list
-      if (addressArray.length === 0) {
-        console.log("[Explore] No cached profiles found. Profiles will appear as users create them.");
-      }
+      // Fetch and verify all profiles from blockchain
+      console.log(`[Explore] Loading ${addressArray.length} profiles from blockchain...`);
       
       // Fetch profiles in parallel (with limit to avoid too many requests)
       // Use cached data when available to avoid unnecessary API calls

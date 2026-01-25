@@ -31,6 +31,93 @@ export interface UserProfile {
 
 const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
 
+// Get total number of registered profiles from blockchain
+export const getProfileCount = async (): Promise<number> => {
+    try {
+        const url = `${MAPPING_URL}/${PROGRAM_ID}/mapping/profile_count/0`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn("Failed to get profile count:", response.statusText);
+            return 0;
+        }
+        const data = await response.json();
+        // Parse the u64 value from response
+        if (typeof data === 'string') {
+            // Extract number from string like "123u64" or "123"
+            const match = data.match(/(\d+)/);
+            return match ? parseInt(match[1], 10) : 0;
+        } else if (typeof data === 'number') {
+            return data;
+        } else if (data && typeof data.value === 'number') {
+            return data.value;
+        }
+        return 0;
+    } catch (error) {
+        console.error("Error fetching profile count:", error);
+        return 0;
+    }
+};
+
+// Get profile address at specific index from blockchain
+export const getProfileAddressAtIndex = async (index: number): Promise<string | null> => {
+    try {
+        const url = `${MAPPING_URL}/${PROGRAM_ID}/mapping/active_profiles/${index}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn(`Failed to get profile at index ${index}:`, response.statusText);
+            return null;
+        }
+        const data = await response.json();
+        // Parse address from response
+        if (typeof data === 'string') {
+            // Extract address from string (should be aleo1...)
+            if (data.startsWith('aleo1')) {
+                return data;
+            }
+            // Try to extract from string representation
+            const match = data.match(/aleo1[a-z0-9]{58}/);
+            return match ? match[0] : null;
+        } else if (data && typeof data.value === 'string') {
+            return data.value.startsWith('aleo1') ? data.value : null;
+        } else if (data && typeof data === 'object' && data.address) {
+            return data.address;
+        }
+        return null;
+    } catch (error) {
+        console.error(`Error fetching profile at index ${index}:`, error);
+        return null;
+    }
+};
+
+// Get all registered profile addresses from blockchain
+export const getAllRegisteredProfiles = async (): Promise<string[]> => {
+    try {
+        const count = await getProfileCount();
+        console.log(`[Registry] Found ${count} registered profiles on blockchain`);
+        
+        if (count === 0) {
+            return [];
+        }
+        
+        // Fetch all profile addresses in parallel (limit to reasonable number)
+        const maxProfiles = Math.min(count, 1000); // Limit to 1000 profiles
+        const fetchPromises: Promise<string | null>[] = [];
+        
+        for (let i = 0; i < maxProfiles; i++) {
+            fetchPromises.push(getProfileAddressAtIndex(i));
+        }
+        
+        const addresses = await Promise.all(fetchPromises);
+        const validAddresses = addresses.filter((addr): addr is string => addr !== null && addr.startsWith('aleo1'));
+        
+        console.log(`[Registry] Retrieved ${validAddresses.length} valid profile addresses`);
+        return validAddresses;
+    } catch (error) {
+        console.error("Error fetching all registered profiles:", error);
+        return [];
+    }
+};
+
 // Helper function to get list of all known profile addresses
 export const getKnownProfileAddresses = (): string[] => {
     try {
