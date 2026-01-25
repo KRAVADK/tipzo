@@ -53,16 +53,20 @@ export const getKnownProfileAddresses = (): string[] => {
 };
 
 // Helper function to add address to known profiles list
-export const addKnownProfileAddress = (address: string) => {
+// Returns true if address was newly added, false if it already existed
+export const addKnownProfileAddress = (address: string): boolean => {
     try {
         const knownAddresses = getKnownProfileAddresses();
         if (!knownAddresses.includes(address)) {
             knownAddresses.push(address);
             localStorage.setItem('tipzo_known_profiles', JSON.stringify(knownAddresses));
-            console.log(`[Cache] Added ${address} to known profiles list`);
+            console.log(`[Cache] Added ${address} to known profiles list (total: ${knownAddresses.length})`);
+            return true; // New address added
         }
+        return false; // Address already existed
     } catch (e) {
         console.warn("Failed to add known profile:", e);
+        return false;
     }
 };
 
@@ -311,10 +315,12 @@ export const cacheProfile = (address: string, profile: { name: string; bio: stri
         }));
         // Add to known profiles list - this is critical for profile discovery
         // When a profile is cached, it's added to the global list that all users can see
-        addKnownProfileAddress(address);
-        console.log(`[Cache] Cached profile for ${address}:`, profile.name);
+        // This ensures profiles are discoverable even for new users
+        const wasNew = addKnownProfileAddress(address);
+        console.log(`[Cache] Cached profile for ${address}:`, profile.name, wasNew ? '(new)' : '(existing)');
         
         // Dispatch event to notify other components that a new profile was discovered
+        // This triggers Explore to refresh and show the new profile
         window.dispatchEvent(new CustomEvent('profileDiscovered', { detail: { address, profile } }));
     } catch (e) {
         console.warn("Failed to cache profile:", e);
