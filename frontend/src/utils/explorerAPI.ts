@@ -115,9 +115,11 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
     const addresses = new Set<string>();
     
     // First, add all known addresses from storage (these are profiles that have been discovered)
+    // This ensures that even if RPC fails, we still have profiles from previous discoveries
     const knownAddresses = getKnownProfileAddressesFromStorage();
+    const initialCount = knownAddresses.length;
     knownAddresses.forEach(addr => addresses.add(addr));
-    console.log(`[Discover] Starting with ${knownAddresses.length} known addresses from storage`);
+    console.log(`[Discover] Starting with ${initialCount} known addresses from storage`);
     
     try {
         // Try to get transactions for create_profile and update_profile using RPC
@@ -259,11 +261,16 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
             }
         }
         
-        console.log(`[Discover] Discovered ${addresses.size} total profile addresses (${addresses.size - knownAddresses.length} new from blockchain)`);
+        const newAddresses = addresses.size - initialCount;
+        if (newAddresses > 0) {
+            console.log(`[Discover] Discovered ${addresses.size} total profile addresses (${newAddresses} new from blockchain)`);
+        } else {
+            console.log(`[Discover] Using ${initialCount} known addresses from storage (RPC unavailable or no new profiles found)`);
+        }
         
     } catch (e) {
         console.warn("Failed to discover profile addresses:", e);
-        console.log(`[Discover] Using ${knownAddresses.length} known addresses from storage as fallback`);
+        console.log(`[Discover] Using ${initialCount} known addresses from storage as fallback`);
     }
     
     return Array.from(addresses);
