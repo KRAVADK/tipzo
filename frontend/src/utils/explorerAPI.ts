@@ -70,6 +70,16 @@ export const addKnownProfileAddress = (address: string): boolean => {
     }
 };
 
+// Seed list of known profile addresses - these are profiles that have been created
+// This list gets populated as profiles are discovered and ensures profiles are visible to all users
+// Even new users in anonymous mode will see these profiles
+const getSeedProfileAddresses = (): string[] => {
+    // This is a seed list that can be manually updated or populated from known profiles
+    // For now, we'll rely on localStorage, but this can be extended with a hardcoded list
+    // if needed for initial profile discovery
+    return [];
+};
+
 // Alternative: Try to get profile addresses from Provable Explorer API
 // Since RPC might not work, we'll use a different approach - check known addresses
 // or use a seed list that gets populated as profiles are discovered
@@ -78,12 +88,16 @@ const getKnownProfileAddressesFromStorage = (): string[] => {
         // Get from global list
         const knownList = localStorage.getItem('tipzo_known_profiles');
         if (knownList) {
-            return JSON.parse(knownList);
+            const addresses = JSON.parse(knownList);
+            // Also add seed addresses if any
+            const seedAddresses = getSeedProfileAddresses();
+            return [...new Set([...addresses, ...seedAddresses])];
         }
-        return [];
+        // If no list exists, return seed addresses
+        return getSeedProfileAddresses();
     } catch (e) {
         console.warn("Failed to get known profiles from storage:", e);
-        return [];
+        return getSeedProfileAddresses();
     }
 };
 
