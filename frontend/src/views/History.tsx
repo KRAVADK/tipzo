@@ -194,8 +194,8 @@ const History: React.FC = () => {
                       </div>
                       <div>
                         <div className="font-bold text-lg flex items-center gap-2">
-                          Received from {formatAddress(tx.sender || "")}
-                          <span title="Private Record"><EyeOff size={16} className="text-gray-500" /></span>
+                          Received from <span className="italic">Anonymous</span>
+                          <span title="Private Record - Sender identity is hidden for privacy"><EyeOff size={16} className="text-gray-500" /></span>
                         </div>
                         <div className="text-sm font-medium text-gray-500">{dateStr}</div>
                         {message && message !== "0field" && <div className="text-sm italic text-gray-600 mt-1">"{message}"</div>}
