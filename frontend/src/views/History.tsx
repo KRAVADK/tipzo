@@ -198,6 +198,7 @@ const History: React.FC = () => {
                           <span title="Private Record - Sender identity is hidden for privacy"><EyeOff size={16} className="text-gray-500" /></span>
                         </div>
                         <div className="text-sm font-medium text-gray-500">{dateStr}</div>
+                        <div className="text-xs font-mono text-gray-400 mt-1">Function: send_donation</div>
                         {message && message !== "0field" && <div className="text-sm italic text-gray-600 mt-1">"{message}"</div>}
                       </div>
                     </div>
@@ -242,6 +243,7 @@ const History: React.FC = () => {
                           <span title="Private Record"><EyeOff size={16} className="text-gray-500" /></span>
                         </div>
                         <div className="text-sm font-medium text-gray-500">{dateStr}</div>
+                        <div className="text-xs font-mono text-gray-400 mt-1">Function: send_donation</div>
                         {message && message !== "0field" && <div className="text-sm italic text-gray-600 mt-1">"{message}"</div>}
                       </div>
                     </div>

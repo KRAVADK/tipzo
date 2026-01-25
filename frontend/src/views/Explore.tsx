@@ -150,14 +150,14 @@ const Explore: React.FC = () => {
             throw new Error("Token transfer was rejected or failed");
         }
         
-        console.log("✅ Transfer confirmed:", transferTxId);
+        console.log("✅ Transfer confirmed (transfer_public):", transferTxId);
         
         // Wait a bit for transfer to be processed
         await new Promise(resolve => setTimeout(resolve, 1500));
         
         // STEP 2: Create donation record (private)
-        // send_donation(sender, recipient, amount, message, timestamp) — contract order
-        console.log("📝 Step 2/2: Creating donation record...");
+        // send_donation(recipient, amount, message, timestamp) — contract order
+        console.log("📝 Step 2/2: Creating donation record (send_donation)...");
         const messageField = stringToField(""); // Empty message for now
         const timestamp = Math.floor(Date.now() / 1000);
         
@@ -190,7 +190,7 @@ const Explore: React.FC = () => {
         }
         
         console.log("✅ Donation record created:", donationTxId);
-        alert(`Donation sent successfully!\nTransfer: ${transferTxId.slice(0, 8)}...\nRecord: ${donationTxId.slice(0, 8)}...`);
+        alert(`Donation sent successfully!\n\nFunction: send_donation\nTransfer: ${transferTxId.slice(0, 8)}...\nRecord: ${donationTxId.slice(0, 8)}...`);
         
     } catch (e) {
         console.error("Donation failed:", e);
