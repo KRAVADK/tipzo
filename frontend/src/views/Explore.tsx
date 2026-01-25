@@ -190,10 +190,18 @@ const Explore: React.FC = () => {
     const handleProfileUpdate = () => {
       loadAllProfiles();
     };
+    
+    // Listen for profile cached events (when profiles are discovered)
+    const handleProfileCached = () => {
+      loadAllProfiles();
+    };
+    
     window.addEventListener('profileUpdated', handleProfileUpdate);
+    window.addEventListener('profileCached', handleProfileCached);
     
     return () => {
       window.removeEventListener('profileUpdated', handleProfileUpdate);
+      window.removeEventListener('profileCached', handleProfileCached);
     };
   }, []); // Only run on mount
 
