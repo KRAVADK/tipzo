@@ -69,12 +69,29 @@ const Explore: React.FC = () => {
         console.warn("Failed to get known profiles list:", e);
       }
       
-      // If we have very few profiles, try to discover more by checking common patterns
-      // or by trying to fetch profiles that might exist
-      // For now, we'll rely on the known addresses list
+      // If we have very few profiles, try to discover more from blockchain transactions
+      let addressArray = Array.from(knownAddresses);
+      
+      // If we have few or no profiles, try to discover from blockchain
+      if (addressArray.length < 5) {
+        console.log("[Explore] Few profiles found locally, discovering from blockchain...");
+        try {
+          const { discoverProfileAddresses } = await import('../utils/explorerAPI');
+          const discoveredAddresses = await discoverProfileAddresses();
+          discoveredAddresses.forEach(addr => {
+            knownAddresses.add(addr);
+            if (!cacheData.has(addr)) {
+              cacheData.set(addr, { createdAt: Date.now() });
+            }
+          });
+          addressArray = Array.from(knownAddresses);
+          console.log(`[Explore] Discovered ${discoveredAddresses.length} additional profiles from blockchain`);
+        } catch (e) {
+          console.warn("[Explore] Failed to discover profiles from blockchain:", e);
+        }
+      }
       
       // Fetch and verify all known profiles from blockchain
-      const addressArray = Array.from(knownAddresses);
       console.log(`[Explore] Loading ${addressArray.length} known profiles from blockchain...`);
       
       // If no profiles found locally, try to discover from shared storage or seed list

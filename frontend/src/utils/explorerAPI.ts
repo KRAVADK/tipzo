@@ -90,23 +90,66 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
                 if (response.ok) {
                     const data = await response.json();
                     if (data.result && Array.isArray(data.result)) {
+                        console.log(`[Discover] Found ${data.result.length} transactions for ${functionName}`);
+                        
                         data.result.forEach((tx: any) => {
-                            // Extract address from transaction
-                            // The address is typically in tx.execution.transitions[0].id or tx.fee_transition.id
-                            if (tx.execution?.transitions) {
-                                tx.execution.transitions.forEach((transition: any) => {
-                                    // The caller address is usually in the transition ID or can be derived
-                                    // For now, we'll try to extract from transaction structure
-                                    if (transition.id) {
-                                        // Transition ID format might contain address info
-                                        // We'll need to parse it or use a different approach
-                                    }
-                                });
+                            // Try multiple ways to extract the caller address
+                            let address: string | null = null;
+                            
+                            // Method 1: Check fee_transition for caller
+                            if (tx.fee_transition?.id) {
+                                // Fee transition ID might contain address
+                                const feeId = tx.fee_transition.id;
+                                // Try to extract aleo1 address from fee transition
+                                const addressMatch = feeId.match(/(aleo1[a-z0-9]+)/);
+                                if (addressMatch) {
+                                    address = addressMatch[1];
+                                }
                             }
                             
-                            // Alternative: Check if transaction has fee_transition with address
-                            if (tx.fee_transition?.id) {
-                                // Fee transition might have the caller address
+                            // Method 2: Check execution transitions
+                            if (!address && tx.execution?.transitions) {
+                                for (const transition of tx.execution.transitions) {
+                                    if (transition.function === functionName) {
+                                        // Try to extract from transition ID
+                                        if (transition.id) {
+                                            const addressMatch = transition.id.match(/(aleo1[a-z0-9]+)/);
+                                            if (addressMatch) {
+                                                address = addressMatch[1];
+                                                break;
+                                            }
+                                        }
+                                        // Try to extract from inputs (first input might be caller)
+                                        if (transition.inputs && transition.inputs.length > 0) {
+                                            for (const input of transition.inputs) {
+                                                if (typeof input === 'string' && input.startsWith('aleo1')) {
+                                                    address = input;
+                                                    break;
+                                                }
+                                                if (typeof input === 'object' && input.value && input.value.startsWith('aleo1')) {
+                                                    address = input.value;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // Method 3: Check transaction metadata
+                            if (!address) {
+                                if (tx.caller && tx.caller.startsWith('aleo1')) {
+                                    address = tx.caller;
+                                } else if (tx.sender && tx.sender.startsWith('aleo1')) {
+                                    address = tx.sender;
+                                } else if (tx.address && tx.address.startsWith('aleo1')) {
+                                    address = tx.address;
+                                }
+                            }
+                            
+                            if (address) {
+                                addresses.add(address);
+                                console.log(`[Discover] Found profile address: ${address} from ${functionName} transaction`);
                             }
                         });
                     }
@@ -116,9 +159,7 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
             }
         }
         
-        // Since extracting addresses from transactions is complex,
-        // we'll use a different approach: try common addresses or use a seed list
-        // For now, return empty and rely on localStorage discovery
+        console.log(`[Discover] Discovered ${addresses.size} profile addresses from blockchain`);
         
     } catch (e) {
         console.warn("Failed to discover profile addresses:", e);
