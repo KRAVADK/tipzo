@@ -7,7 +7,7 @@ import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
 import { stringToField } from '../utils/aleo';
-import { getProfileFromChain, cacheProfile, getKnownProfileAddresses, addKnownProfileAddress } from '../utils/explorerAPI';
+import { getProfileFromChain, cacheProfile } from '../utils/explorerAPI';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 
 const Explore: React.FC = () => {
@@ -80,7 +80,7 @@ const Explore: React.FC = () => {
           if (chainProfile) {
             const profileName = chainProfile.name && chainProfile.name.trim() ? chainProfile.name : "Anonymous";
             const cacheInfo = cacheData.get(address);
-            return {
+            const creator: Creator = {
               id: address,
               name: profileName,
               handle: address.slice(0, 10) + "...",
@@ -88,9 +88,11 @@ const Explore: React.FC = () => {
               avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
               bio: chainProfile.bio || "",
               verified: false,
-              color: 'white' as const,
-              createdAt: cacheInfo?.createdAt || Date.now() // Store creation date for sorting
+              color: 'white' as const
             };
+            // Store creation date for sorting (attach to creator object)
+            (creator as any).createdAt = cacheInfo?.createdAt || Date.now();
+            return creator;
           }
           return null;
         } catch (e) {
@@ -100,9 +102,12 @@ const Explore: React.FC = () => {
       });
       
       const results = await Promise.all(fetchPromises);
-      const validProfiles = results.filter((p): p is Creator & { createdAt: number } => p !== null);
-      
-      profilesList.push(...validProfiles);
+      // Filter out null values and ensure type safety
+      for (const result of results) {
+        if (result !== null) {
+          profilesList.push(result);
+        }
+      }
     } catch (e) {
       console.warn("Failed to get cached profiles:", e);
     }
