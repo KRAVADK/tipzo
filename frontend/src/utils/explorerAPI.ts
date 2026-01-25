@@ -150,9 +150,15 @@ export const cacheProfile = (address: string, profile: { name: string; bio: stri
             cachedAt: now,
             createdAt: finalCreatedAt // Store creation date for sorting
         }));
-        // Add to known profiles list
+        // Add to known profiles list (this ensures profile is visible to all users on this device)
         addKnownProfileAddress(address);
         console.log(`[Cache] Cached profile for ${address}:`, profile.name);
+        
+        // Dispatch event to notify other components about new profile
+        // This helps synchronize profiles across the app
+        window.dispatchEvent(new CustomEvent('profileCached', { 
+            detail: { address, name: profile.name } 
+        }));
     } catch (e) {
         console.warn("Failed to cache profile:", e);
     }
