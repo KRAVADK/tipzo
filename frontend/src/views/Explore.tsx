@@ -144,6 +144,9 @@ const Explore: React.FC = () => {
         // that we haven't cached yet. This helps new users see existing profiles.
         if (profiles.length === 0) {
           console.log("[Explore] No profiles found. Profiles will appear as they are created or discovered.");
+          console.log("[Explore] Tip: Search for a profile by address to add it to the list.");
+        } else {
+          console.log(`[Explore] Loaded ${profiles.length} profiles`);
         }
       } catch (e) {
         console.error("Failed to load profiles:", e);
