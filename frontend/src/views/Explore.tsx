@@ -284,61 +284,59 @@ const Explore: React.FC = () => {
             setSearchError("Profile not found. This address hasn't created a profile yet.");
           }
         } else {
-          // Search by nickname - filter existing profiles
-          const queryLower = trimmedSearch.toLowerCase();
-          const filtered = allProfiles.filter(creator => {
-            const nameMatch = creator.name.toLowerCase().includes(queryLower);
-            const addressMatch = creator.id.toLowerCase().includes(queryLower);
-            return nameMatch || addressMatch;
-          });
+          // Search by nickname - first try searching in cache
+          const foundAddresses = searchProfilesByName(trimmedSearch);
           
-          if (filtered.length > 0) {
-            setCreators(filtered);
-            setSearchError(null);
-          } else {
-            // Try searching in cache for profiles not yet loaded
-            const foundAddresses = searchProfilesByName(trimmedSearch);
+          if (foundAddresses.length > 0) {
+            // Found profiles by name in cache - fetch them from chain
+            const newCreators: Creator[] = [];
             
-            if (foundAddresses.length > 0) {
-              // Fetch profiles from chain that aren't in the list yet
-              const newCreators: Creator[] = [];
-              
-              for (const address of foundAddresses) {
-                if (!allProfiles.some(c => c.id === address)) {
-                  try {
-                    const profile = await getProfileFromChain(address);
-                    if (profile) {
-                      // Cache profile (automatically adds to global list)
-                      cacheProfile(address, profile);
-                      
-                      const profileName = profile.name && profile.name.trim() ? profile.name : "Anonymous";
-                      newCreators.push({
-                        id: address,
-                        name: profileName,
-                        handle: address.slice(0, 10) + "...",
-                        category: 'User',
-                        avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
-                        bio: profile.bio || "",
-                        verified: false,
-                        color: 'white'
-                      });
-                    }
-                  } catch (e) {
-                    console.warn(`Failed to fetch profile for ${address}:`, e);
-                  }
+            for (const address of foundAddresses) {
+              try {
+                const profile = await getProfileFromChain(address);
+                if (profile) {
+                  // Cache profile (automatically adds to global list)
+                  cacheProfile(address, profile);
+                  
+                  const profileName = profile.name && profile.name.trim() ? profile.name : "Anonymous";
+                  newCreators.push({
+                    id: address,
+                    name: profileName,
+                    handle: address.slice(0, 10) + "...",
+                    category: 'User',
+                    avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
+                    bio: profile.bio || "",
+                    verified: false,
+                    color: 'white'
+                  });
                 }
+              } catch (e) {
+                console.warn(`Failed to fetch profile for ${address}:`, e);
               }
-              
-              if (newCreators.length > 0) {
-                setCreators(newCreators);
-                setSearchError(null);
-              } else {
-                setCreators([]);
-                setSearchError("No profiles found matching your search.");
-              }
+            }
+            
+            if (newCreators.length > 0) {
+              setCreators(newCreators);
+              setSearchError(null);
             } else {
               setCreators([]);
               setSearchError("No profiles found matching your search.");
+            }
+          } else {
+            // No profiles found in cache - try filtering already loaded profiles
+            const queryLower = trimmedSearch.toLowerCase();
+            const filtered = allProfiles.filter(creator => {
+              const nameMatch = creator.name.toLowerCase().includes(queryLower);
+              const addressMatch = creator.id.toLowerCase().includes(queryLower);
+              return nameMatch || addressMatch;
+            });
+            
+            if (filtered.length > 0) {
+              setCreators(filtered);
+              setSearchError(null);
+            } else {
+              setCreators([]);
+              setSearchError("No profiles found matching your search. Try searching by Aleo address first.");
             }
           }
         }
