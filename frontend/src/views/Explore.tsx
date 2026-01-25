@@ -72,12 +72,26 @@ const Explore: React.FC = () => {
       // If we have very few profiles, try to discover more from blockchain transactions
       let addressArray = Array.from(knownAddresses);
       
-      // Note: RPC-based discovery is disabled due to CORS issues
-      // Profiles are discovered through:
-      // 1. Automatic addition when created/updated
-      // 2. Donation history (recipients and senders)
-      // 3. Manual search by address or nickname
-      // 4. When users interact with each other
+      // Try to discover more profiles by verifying known addresses
+      // This helps when profiles were added to the list but not yet loaded
+      if (addressArray.length < 10) {
+        try {
+          const { discoverProfileAddresses } = await import('../utils/explorerAPI');
+          const discoveredAddresses = await discoverProfileAddresses();
+          if (discoveredAddresses.length > 0) {
+            discoveredAddresses.forEach(addr => {
+              knownAddresses.add(addr);
+              if (!cacheData.has(addr)) {
+                cacheData.set(addr, { createdAt: Date.now() });
+              }
+            });
+            addressArray = Array.from(knownAddresses);
+            console.log(`[Explore] Discovered ${discoveredAddresses.length} additional profiles from verification`);
+          }
+        } catch (e) {
+          console.warn("[Explore] Failed to discover profiles:", e);
+        }
+      }
       
       if (addressArray.length === 0) {
         console.log("[Explore] No profiles found locally. Profiles will appear when:");
