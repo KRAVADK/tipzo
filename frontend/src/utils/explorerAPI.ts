@@ -124,7 +124,6 @@ const discoverProfilesFromExplorerAPI = async (): Promise<string[]> => {
             const data = await response.json();
             // If the API returns transaction information, extract addresses
             // This is a placeholder - actual implementation depends on API structure
-            console.log("[Discover] Program data from Explorer API:", data);
         }
     } catch (e) {
         console.warn("[Discover] Failed to get program data from Explorer API:", e);
@@ -251,20 +250,13 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
                             
                             if (address && address.length >= 58) {
                                 addresses.add(address);
-                                console.log(`[Discover] Found profile address: ${address} from ${functionName} transaction`);
-                            } else {
-                                console.warn(`[Discover] Could not extract address from transaction:`, tx);
-                                }
+                            }
                             });
                             break; // Success, no need to try other endpoints
-                        } else if (data.error) {
-                            console.warn(`[Discover] RPC error for ${functionName} from ${rpcUrl}:`, data.error);
                         }
-                    } else {
-                        console.warn(`[Discover] Failed to fetch from ${rpcUrl} for ${functionName}:`, response.status, response.statusText);
                     }
                 } catch (e) {
-                    console.warn(`[Discover] Exception with ${rpcUrl} for ${functionName}:`, e);
+                    // Silently catch CORS and network errors - they're expected for some endpoints
                     // Continue to next endpoint
                 }
             }
