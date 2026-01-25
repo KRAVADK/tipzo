@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { NeoCard, NeoBadge, NeoButton } from '../components/NeoComponents';
+import { NeoCard, NeoBadge, NeoButton, WalletRequiredModal } from '../components/NeoComponents';
 import { ArrowUpRight, ArrowDownLeft, EyeOff, Lock, Loader2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useWalletRecords, RecordDonation } from '../hooks/useWalletRecords';
@@ -13,6 +13,7 @@ const History: React.FC = () => {
   const [records, setRecords] = useState<RecordDonation[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [chartExpanded, setChartExpanded] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
 
   const loadRecords = async () => {
     setRefreshing(true);
@@ -83,12 +84,33 @@ const History: React.FC = () => {
     return received.sort((a, b) => b.timestamp - a.timestamp);
   }, [records, publicKey]);
 
+  // Show modal when wallet is not connected
+  useEffect(() => {
+    if (!publicKey) {
+      setShowWalletModal(true);
+    } else {
+      setShowWalletModal(false);
+    }
+  }, [publicKey]);
+
   if (!publicKey) {
       return (
+        <>
           <div className="flex flex-col items-center justify-center min-h-[50vh]">
-              <h2 className="text-3xl font-black mb-4">Connect Wallet</h2>
-              <p className="text-xl text-gray-600">Please connect your Aleo wallet to view history.</p>
+            <h2 className="text-3xl font-black mb-4">History & Analytics</h2>
+            <p className="text-xl text-gray-600">Connect your wallet to view your transaction history.</p>
           </div>
+          <WalletRequiredModal
+            isOpen={showWalletModal}
+            onClose={() => setShowWalletModal(false)}
+            onConnect={() => {
+              setShowWalletModal(false);
+              // Dispatch event to open wallet modal from navbar
+              window.dispatchEvent(new CustomEvent('openWalletModal'));
+            }}
+            action="view your transaction history"
+          />
+        </>
       );
   }
 

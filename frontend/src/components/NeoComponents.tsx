@@ -1,4 +1,5 @@
 import React from 'react';
+import { Wallet, X } from 'lucide-react';
 
 // --- Types ---
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -91,6 +92,61 @@ export const NeoBadge: React.FC<{ children: React.ReactNode, color?: string }> =
     </span>
   )
 }
+
+export interface WalletRequiredModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConnect: () => void;
+  action?: string;
+}
+
+export const WalletRequiredModal: React.FC<WalletRequiredModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  onConnect,
+  action = "perform this action"
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <NeoCard color="yellow" className="w-full max-w-md relative animate-in fade-in zoom-in duration-200">
+        <button 
+          onClick={onClose} 
+          className="absolute top-4 right-4 hover:bg-yellow-300 p-1 rounded-full transition-colors border-2 border-black shadow-neo-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+        >
+          <X size={24} />
+        </button>
+        <div className="flex flex-col items-center text-center gap-6">
+          <div className="w-20 h-20 bg-white border-2 border-black flex items-center justify-center shadow-neo">
+            <Wallet size={40} className="text-tipzo-orange" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-black mb-3">Wallet Required</h2>
+            <p className="text-lg font-medium text-gray-700">
+              Please connect your Aleo wallet to {action}.
+            </p>
+          </div>
+          <div className="flex gap-4 w-full">
+            <NeoButton 
+              variant="secondary" 
+              className="flex-1" 
+              onClick={onClose}
+            >
+              Cancel
+            </NeoButton>
+            <NeoButton 
+              className="flex-1 flex items-center justify-center gap-2" 
+              onClick={onConnect}
+            >
+              <Wallet size={18} /> Connect Wallet
+            </NeoButton>
+          </div>
+        </div>
+      </NeoCard>
+    </div>
+  );
+};
 
 export const KineticTypeSphere: React.FC = () => {
   // Config for the sphere words

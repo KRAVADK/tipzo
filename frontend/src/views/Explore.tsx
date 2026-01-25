@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NeoCard, NeoButton, NeoInput, NeoBadge } from '../components/NeoComponents';
+import { NeoCard, NeoButton, NeoInput, NeoBadge, WalletRequiredModal } from '../components/NeoComponents';
 import { Creator } from '../types';
 import { Search, DollarSign, Loader2 } from 'lucide-react';
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
@@ -15,6 +15,7 @@ const Explore: React.FC = () => {
   const [creators, setCreators] = useState<Creator[]>([]);
   const [loading, setLoading] = useState(false);
   const [donationAmount, setDonationAmount] = useState<string>("1");
+  const [showWalletModal, setShowWalletModal] = useState(false);
 
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -96,7 +97,7 @@ const Explore: React.FC = () => {
 
   const handleDonate = async (creator: Creator) => {
     if (!wallet || !publicKey) {
-        alert("Please connect your wallet first");
+        setShowWalletModal(true);
         return;
     }
 
@@ -271,6 +272,17 @@ const Explore: React.FC = () => {
           )}
         </div>
       )}
+      
+      <WalletRequiredModal
+        isOpen={showWalletModal}
+        onClose={() => setShowWalletModal(false)}
+        onConnect={() => {
+          setShowWalletModal(false);
+          // Dispatch event to open wallet modal from navbar
+          window.dispatchEvent(new CustomEvent('openWalletModal'));
+        }}
+        action="send donations"
+      />
     </div>
   );
 };
