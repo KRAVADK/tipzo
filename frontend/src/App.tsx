@@ -68,6 +68,17 @@ const Navbar: React.FC = () => {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const network = WalletAdapterNetwork.TestnetBeta;
 
+  // Listen for custom event to open wallet modal
+  useEffect(() => {
+    const handleOpenWalletModal = () => {
+      setShowWalletModal(true);
+    };
+    window.addEventListener('openWalletModal', handleOpenWalletModal);
+    return () => {
+      window.removeEventListener('openWalletModal', handleOpenWalletModal);
+    };
+  }, []);
+
   const handleConnect = async (adapterName: string) => {
     const adapter = wallets.find(w => w.adapter.name === adapterName)?.adapter;
     if (adapter) {

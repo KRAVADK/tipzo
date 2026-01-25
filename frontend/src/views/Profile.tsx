@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NeoCard, NeoButton, NeoInput, NeoTextArea } from '../components/NeoComponents';
+import { NeoCard, NeoButton, NeoInput, NeoTextArea, WalletRequiredModal } from '../components/NeoComponents';
 import { UserProfile } from '../utils/explorerAPI';
 import { Save, Wallet, Loader2 } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
@@ -14,6 +14,7 @@ const Profile: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [existsOnChain, setExistsOnChain] = useState(false);
+  const [showWalletModal, setShowWalletModal] = useState(false);
   
   const [profile, setProfile] = useState<UserProfile & { handle: string }>({
     name: '',
@@ -138,12 +139,33 @@ const Profile: React.FC = () => {
       }
   };
 
+  // Show modal when wallet is not connected
+  useEffect(() => {
+    if (!publicKey) {
+      setShowWalletModal(true);
+    } else {
+      setShowWalletModal(false);
+    }
+  }, [publicKey]);
+
   if (!publicKey) {
       return (
+        <>
           <div className="flex flex-col items-center justify-center min-h-[50vh]">
-              <h2 className="text-3xl font-black mb-4">Connect Wallet</h2>
-              <p className="text-xl text-gray-600">Please connect your Aleo wallet to edit your profile.</p>
+            <h2 className="text-3xl font-black mb-4">Profile</h2>
+            <p className="text-xl text-gray-600">Connect your wallet to view and edit your profile.</p>
           </div>
+          <WalletRequiredModal
+            isOpen={showWalletModal}
+            onClose={() => setShowWalletModal(false)}
+            onConnect={() => {
+              setShowWalletModal(false);
+              // Dispatch event to open wallet modal from navbar
+              window.dispatchEvent(new CustomEvent('openWalletModal'));
+            }}
+            action="view and edit your profile"
+          />
+        </>
       );
   }
 
