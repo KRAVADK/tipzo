@@ -90,27 +90,61 @@ const Explore: React.FC = () => {
       }
       
       // Fetch profiles in parallel (with limit to avoid too many requests)
+      // Use cached data when available to avoid unnecessary API calls
       const fetchPromises = addressArray.slice(0, 100).map(async (address) => {
         try {
-          const chainProfile = await getProfileFromChain(address);
-          if (chainProfile) {
-            const profileName = chainProfile.name && chainProfile.name.trim() ? chainProfile.name : "Anonymous";
-            const cacheInfo = cacheData.get(address);
-            const creator: Creator = {
-              id: address,
-              name: profileName,
-              handle: address.slice(0, 10) + "...",
-              category: 'User' as const,
-              avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
-              bio: chainProfile.bio || "",
-              verified: false,
-              color: 'white' as const
-            };
-            // Store creation date for sorting (attach to creator object)
-            (creator as any).createdAt = cacheInfo?.createdAt || Date.now();
-            return creator;
+          // First check if we have cached data
+          const cacheKey = `tipzo_profile_cache_${address}`;
+          const cached = localStorage.getItem(cacheKey);
+          
+          let profileName: string;
+          let profileBio: string;
+          let shouldFetchFromChain = false;
+          
+          if (cached) {
+            try {
+              const cachedData = JSON.parse(cached);
+              profileName = cachedData.name || "Anonymous";
+              profileBio = cachedData.bio || "";
+              // Only fetch from chain if cache is older than 5 minutes (to get updates)
+              const cacheAge = Date.now() - (cachedData.cachedAt || 0);
+              shouldFetchFromChain = cacheAge > 5 * 60 * 1000; // 5 minutes
+            } catch (e) {
+              // If cache is corrupted, fetch from chain
+              shouldFetchFromChain = true;
+            }
+          } else {
+            // No cache, fetch from chain
+            shouldFetchFromChain = true;
           }
-          return null;
+          
+          // Fetch from chain if needed
+          if (shouldFetchFromChain) {
+            const chainProfile = await getProfileFromChain(address);
+            if (chainProfile) {
+              profileName = chainProfile.name && chainProfile.name.trim() ? chainProfile.name : "Anonymous";
+              profileBio = chainProfile.bio || "";
+            } else if (!cached) {
+              // No profile on chain and no cache, skip
+              return null;
+            }
+            // If chainProfile is null but we have cache, use cache data
+          }
+          
+          const cacheInfo = cacheData.get(address);
+          const creator: Creator = {
+            id: address,
+            name: profileName,
+            handle: address.slice(0, 10) + "...",
+            category: 'User' as const,
+            avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
+            bio: profileBio || "",
+            verified: false,
+            color: 'white' as const
+          };
+          // Store creation date for sorting (attach to creator object)
+          (creator as any).createdAt = cacheInfo?.createdAt || Date.now();
+          return creator;
         } catch (e) {
           console.warn(`Failed to fetch profile for ${address}:`, e);
           return null;
