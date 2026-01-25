@@ -1,6 +1,6 @@
 // Wallet utilities with timeout and retry logic
 
-const WALLET_TIMEOUT = 10000; // 10 seconds
+const WALLET_TIMEOUT = 30000; // 30 seconds (increased for Netlify/production)
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000; // 2 seconds
 

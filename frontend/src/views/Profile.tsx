@@ -143,7 +143,10 @@ const Profile: React.FC = () => {
 
         if (wallet.adapter && 'requestTransaction' in wallet.adapter) {
             // @ts-ignore
-            await requestTransactionWithRetry(wallet.adapter, transaction);
+            await requestTransactionWithRetry(wallet.adapter, transaction, {
+                timeout: 30000, // 30 seconds for profile creation
+                maxRetries: 3
+            });
             
             // Cache the profile immediately for nickname search (optimistic update)
             if (publicKey) {
@@ -220,7 +223,10 @@ const Profile: React.FC = () => {
             ]
         };
         
-        const transferTxId = await requestTransactionWithRetry(adapter, transferTransaction);
+        const transferTxId = await requestTransactionWithRetry(adapter, transferTransaction, {
+            timeout: 30000, // 30 seconds for transfer
+            maxRetries: 3
+        });
         if (!transferTxId) {
             throw new Error("Token transfer was rejected or failed");
         }
@@ -250,7 +256,10 @@ const Profile: React.FC = () => {
             ]
         };
         
-        const donationTxId = await requestTransactionWithRetry(adapter, donationTransaction);
+        const donationTxId = await requestTransactionWithRetry(adapter, donationTransaction, {
+            timeout: 30000, // 30 seconds for donation record
+            maxRetries: 3
+        });
         if (!donationTxId) {
             console.warn("Donation record creation failed, but tokens were transferred");
             alert(`Tokens transferred! Transaction: ${transferTxId}\nNote: Donation record creation failed.`);

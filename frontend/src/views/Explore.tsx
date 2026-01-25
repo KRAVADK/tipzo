@@ -242,7 +242,10 @@ const Explore: React.FC = () => {
         
         console.log("Transfer transaction:", JSON.stringify(transferTransaction, null, 2));
         
-        const transferTxId = await requestTransactionWithRetry(adapter, transferTransaction);
+        const transferTxId = await requestTransactionWithRetry(adapter, transferTransaction, {
+            timeout: 30000, // 30 seconds for transfer
+            maxRetries: 3
+        });
         if (!transferTxId) {
             throw new Error("Token transfer was rejected or failed");
         }
@@ -279,7 +282,10 @@ const Explore: React.FC = () => {
         
         console.log("Donation record transaction:", JSON.stringify(donationTransaction, null, 2));
         
-        const donationTxId = await requestTransactionWithRetry(adapter, donationTransaction);
+        const donationTxId = await requestTransactionWithRetry(adapter, donationTransaction, {
+            timeout: 30000, // 30 seconds for donation record
+            maxRetries: 3
+        });
         if (!donationTxId) {
             console.warn("Donation record creation failed, but tokens were transferred");
             alert(`Tokens transferred! Transaction: ${transferTxId}\nNote: Donation record creation failed.`);
