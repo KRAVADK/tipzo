@@ -76,7 +76,7 @@ const Explore: React.FC = () => {
       // This ensures new profiles are found even if RPC fails sometimes
       // We increase the threshold to be more aggressive about discovery
       if (addressArray.length < 50) {
-        console.log("[Explore] Discovering profiles from blockchain...");
+        // Discovering profiles from blockchain
         try {
           const { discoverProfileAddresses } = await import('../utils/explorerAPI');
           const discoveredAddresses = await discoverProfileAddresses();
@@ -90,34 +90,11 @@ const Explore: React.FC = () => {
               }
             });
             addressArray = Array.from(knownAddresses);
-            const newCount = addressArray.length - beforeCount;
-            if (newCount > 0) {
-              console.log(`[Explore] Discovered ${newCount} new profile addresses from blockchain (total: ${addressArray.length})`);
-            } else {
-              console.log(`[Explore] Using ${addressArray.length} known profile addresses from storage`);
-            }
-          } else {
-            console.log(`[Explore] Using ${addressArray.length} known profile addresses from storage (RPC unavailable)`);
+            // Profiles discovered (no logging to reduce console spam)
           }
         } catch (e) {
-          console.warn("[Explore] Failed to discover profiles from blockchain:", e);
-          console.log(`[Explore] Using ${addressArray.length} known profile addresses from storage as fallback`);
+          // Discovery failed - silently continue with known addresses
         }
-      } else {
-        console.log(`[Explore] Using ${addressArray.length} known profile addresses (discovery skipped - enough profiles found)`);
-      }
-      
-      // Log status for debugging
-      if (addressArray.length === 0) {
-        console.log("[Explore] No profiles found. Profiles will appear as users create them or when you search for them.");
-      }
-      
-      // Fetch and verify all known profiles from blockchain
-      console.log(`[Explore] Loading ${addressArray.length} known profiles from blockchain...`);
-      
-      // If no profiles found locally, try to discover from shared storage or seed list
-      if (addressArray.length === 0) {
-        console.log("[Explore] No cached profiles found. Profiles will appear as users create them or when you search for them.");
       }
       
       // Fetch profiles in parallel (with limit to avoid too many requests)
@@ -147,7 +124,7 @@ const Explore: React.FC = () => {
             return creator;
           } else {
             // Profile doesn't exist on blockchain - remove from known list
-            console.warn(`[Explore] Profile for ${address} not found on blockchain, removing from list`);
+            // Profile not found on blockchain, removing from list
             try {
               const knownList = localStorage.getItem('tipzo_known_profiles');
               if (knownList) {
@@ -199,10 +176,7 @@ const Explore: React.FC = () => {
         // If we have very few profiles, try to discover more by checking if any profiles exist
         // that we haven't cached yet. This helps new users see existing profiles.
         if (profiles.length === 0) {
-          console.log("[Explore] No profiles found. Profiles will appear as they are created or discovered.");
-          console.log("[Explore] Tip: Search for a profile by address to add it to the list.");
-        } else {
-          console.log(`[Explore] Loaded ${profiles.length} profiles`);
+          // No profiles found yet
         }
       } catch (e) {
         console.error("Failed to load profiles:", e);
