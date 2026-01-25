@@ -31,6 +31,22 @@ export interface UserProfile {
 
 const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
 
+// Helper function to cache profile in localStorage for nickname search
+export const cacheProfile = (address: string, profile: { name: string; bio: string }) => {
+    try {
+        const cacheKey = `tipzo_profile_cache_${address}`;
+        localStorage.setItem(cacheKey, JSON.stringify({
+            address,
+            name: profile.name,
+            bio: profile.bio,
+            cachedAt: Date.now()
+        }));
+        console.log(`[Cache] Cached profile for ${address}:`, profile.name);
+    } catch (e) {
+        console.warn("Failed to cache profile:", e);
+    }
+};
+
 export const getProfileFromChain = async (address: string): Promise<UserProfile | null> => {
     try {
         const url = `${MAPPING_URL}/${PROGRAM_ID}/mapping/profiles/${address}`;
@@ -104,10 +120,15 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
             
             console.log("Decoded profile:", { name: decodedName, bio: decodedBio });
             
-            return {
+            const profileData = {
                 name: decodedName,
                 bio: decodedBio
             };
+            
+            // Cache the profile for nickname search
+            cacheProfile(address, profileData);
+            
+            return profileData;
         }
         
         console.warn("Could not parse profile data - no name field found");

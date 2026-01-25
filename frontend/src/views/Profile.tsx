@@ -3,7 +3,7 @@ import { NeoCard, NeoButton, NeoInput, NeoTextArea, WalletRequiredModal } from '
 import { UserProfile } from '../utils/explorerAPI';
 import { Save, Wallet, Loader2 } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
-import { getProfileFromChain } from '../utils/explorerAPI';
+import { getProfileFromChain, cacheProfile } from '../utils/explorerAPI';
 import { stringToField } from '../utils/aleo';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 import { WalletAdapterNetwork } from '@demox-labs/aleo-wallet-adapter-base';
@@ -128,6 +128,15 @@ const Profile: React.FC = () => {
         if (wallet.adapter && 'requestTransaction' in wallet.adapter) {
             // @ts-ignore
             await requestTransactionWithRetry(wallet.adapter, transaction);
+            
+            // Cache the profile immediately for nickname search (optimistic update)
+            if (publicKey) {
+                cacheProfile(publicKey, {
+                    name: name,
+                    bio: bio
+                });
+            }
+            
             alert(`Profile ${existsOnChain ? 'updated' : 'created'} successfully!\n\nFunction: ${functionName}\nTransaction sent! It may take a few minutes to appear.`);
         }
 

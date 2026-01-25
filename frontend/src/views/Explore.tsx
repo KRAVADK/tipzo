@@ -6,7 +6,7 @@ import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
 import { stringToField } from '../utils/aleo';
-import { getProfileFromChain } from '../utils/explorerAPI';
+import { getProfileFromChain, cacheProfile } from '../utils/explorerAPI';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 
 const Explore: React.FC = () => {
@@ -20,20 +20,6 @@ const Explore: React.FC = () => {
 
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  // Helper function to cache profile in localStorage
-  const cacheProfile = (address: string, profile: { name: string; bio: string }) => {
-    try {
-      const cacheKey = `tipzo_profile_cache_${address}`;
-      localStorage.setItem(cacheKey, JSON.stringify({
-        address,
-        name: profile.name,
-        bio: profile.bio,
-        cachedAt: Date.now()
-      }));
-    } catch (e) {
-      console.warn("Failed to cache profile:", e);
-    }
-  };
 
   // Helper function to search profiles by name in cache
   const searchProfilesByName = (nameQuery: string): string[] => {
