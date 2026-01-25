@@ -30,12 +30,6 @@ export interface UserProfile {
 }
 
 const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
-// Try multiple RPC endpoints for reliability
-const ALEO_RPC_URLS = [
-    "https://api.testnet.aleo.org/v1",
-    "https://testnet3.aleorpc.com",
-    "https://vm.aleo.org/api/testnet3"
-];
 
 // Helper function to get list of all known profile addresses
 export const getKnownProfileAddresses = (): string[] => {
