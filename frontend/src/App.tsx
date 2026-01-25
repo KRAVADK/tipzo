@@ -209,6 +209,7 @@ const AppContent: React.FC = () => {
             <Route path="/explore" element={<Explore />} />
             <Route path="/history" element={<History />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/profile/:address" element={<Profile />} />
           </Routes>
         </main>
         <Footer />

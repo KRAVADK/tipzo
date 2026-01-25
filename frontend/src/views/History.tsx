@@ -183,7 +183,13 @@ const History: React.FC = () => {
             )}
             <div className="space-y-4">
               {receivedTransactions.map((tx, idx) => {
-                const dateStr = new Date(tx.timestamp * 1000).toLocaleDateString() + ' ' + new Date(tx.timestamp * 1000).toLocaleTimeString();
+                // Timestamp is in seconds (Unix timestamp), convert to milliseconds
+                const date = new Date(tx.timestamp * 1000);
+                // Validate date is reasonable (not in far future or past)
+                const isValidDate = !isNaN(date.getTime()) && date.getFullYear() > 2020 && date.getFullYear() < 2100;
+                const dateStr = isValidDate 
+                  ? date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+                  : `Invalid timestamp: ${tx.timestamp}`;
                 const message = fieldToString(tx.message);
 
                 return (
@@ -228,7 +234,13 @@ const History: React.FC = () => {
             )}
             <div className="space-y-4">
               {sentTransactions.map((tx, idx) => {
-                const dateStr = new Date(tx.timestamp * 1000).toLocaleDateString() + ' ' + new Date(tx.timestamp * 1000).toLocaleTimeString();
+                // Timestamp is in seconds (Unix timestamp), convert to milliseconds
+                const date = new Date(tx.timestamp * 1000);
+                // Validate date is reasonable (not in far future or past)
+                const isValidDate = !isNaN(date.getTime()) && date.getFullYear() > 2020 && date.getFullYear() < 2100;
+                const dateStr = isValidDate 
+                  ? date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+                  : `Invalid timestamp: ${tx.timestamp}`;
                 const message = fieldToString(tx.message);
 
                 return (

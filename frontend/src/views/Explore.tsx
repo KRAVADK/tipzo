@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { NeoCard, NeoButton, NeoInput, NeoBadge, WalletRequiredModal } from '../components/NeoComponents';
 import { Creator } from '../types';
-import { Search, DollarSign, Loader2 } from 'lucide-react';
+import { Search, DollarSign, Loader2, User, ExternalLink, X } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
@@ -11,15 +12,79 @@ import { requestTransactionWithRetry } from '../utils/walletUtils';
 
 const Explore: React.FC = () => {
   const { wallet, publicKey } = useWallet();
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [creators, setCreators] = useState<Creator[]>([]);
+  const [allProfiles, setAllProfiles] = useState<Creator[]>([]);
   const [loading, setLoading] = useState(false);
   const [donationAmount, setDonationAmount] = useState<string>("1");
   const [donationMessage, setDonationMessage] = useState<string>("");
   const [showWalletModal, setShowWalletModal] = useState(false);
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [selectedCreatorForDonation, setSelectedCreatorForDonation] = useState<Creator | null>(null);
 
   const [searchError, setSearchError] = useState<string | null>(null);
 
+
+  // Helper function to get all cached profiles
+  const getAllCachedProfiles = async (): Promise<Creator[]> => {
+    const profilesList: Creator[] = [];
+    try {
+      const allKeys = Object.keys(localStorage);
+      const cacheKeys = allKeys.filter(key => key.startsWith("tipzo_profile_cache_"));
+      
+      for (const key of cacheKeys) {
+        try {
+          const cached = localStorage.getItem(key);
+          if (cached) {
+            const profile = JSON.parse(cached);
+            if (profile.address && profile.name) {
+              // Verify profile still exists on chain
+              const chainProfile = await getProfileFromChain(profile.address);
+              if (chainProfile) {
+                const profileName = chainProfile.name && chainProfile.name.trim() ? chainProfile.name : "Anonymous";
+                profilesList.push({
+                  id: profile.address,
+                  name: profileName,
+                  handle: profile.address.slice(0, 10) + "...",
+                  category: 'User',
+                  avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${profile.address}`,
+                  bio: chainProfile.bio || "",
+                  verified: false,
+                  color: 'white'
+                });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to parse cached profile:", e);
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to get cached profiles:", e);
+    }
+    return profilesList.sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  // Load all profiles on component mount
+  useEffect(() => {
+    const loadAllProfiles = async () => {
+      setLoading(true);
+      try {
+        const profiles = await getAllCachedProfiles();
+        setAllProfiles(profiles);
+        if (!searchTerm) {
+          setCreators(profiles);
+          setIsSearchMode(false);
+        }
+      } catch (e) {
+        console.error("Failed to load profiles:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadAllProfiles();
+  }, []);
 
   // Helper function to search profiles by name in cache
   const searchProfilesByName = (nameQuery: string): string[] => {
@@ -59,9 +124,23 @@ const Explore: React.FC = () => {
       // Check if search term looks like an Aleo address
       const trimmedSearch = searchTerm.trim();
       if (!trimmedSearch) {
-        setCreators([]);
+        // If search is empty, show all profiles
+        if (allProfiles.length > 0) {
+          setCreators(allProfiles);
+        } else {
+          // Load all profiles if not loaded yet
+          getAllCachedProfiles().then(profiles => {
+            setAllProfiles(profiles);
+            setCreators(profiles);
+          });
+        }
+        setIsSearchMode(false);
+        setSelectedCreatorForDonation(null);
         return;
       }
+
+      setIsSearchMode(true);
+      setSelectedCreatorForDonation(creator);
 
       // Check if it's an address search
       if (trimmedSearch.startsWith("aleo1") && trimmedSearch.length >= 10) {
@@ -103,10 +182,12 @@ const Explore: React.FC = () => {
                     color: 'white'
                 };
                 setCreators([newCreator]); // Replace list with found profile
+                setSelectedCreatorForDonation(newCreator); // Auto-select for donation
                 setSearchError(null);
             } else {
                 // Profile doesn't exist on chain
                 setCreators([]);
+                setSelectedCreatorForDonation(null);
                 setSearchError("Profile not found. This address hasn't created a profile yet. Make sure the profile was successfully saved to the blockchain.");
             }
         } catch (e) {
@@ -152,9 +233,11 @@ const Explore: React.FC = () => {
             
             if (creatorsList.length > 0) {
               setCreators(creatorsList);
+              // Don't auto-select when searching by name - let user choose
               setSearchError(null);
             } else {
               setCreators([]);
+              setSelectedCreatorForDonation(null);
               setSearchError("No profiles found with this nickname. Try searching by Aleo address first to add profiles to cache.");
             }
           } else {
@@ -176,7 +259,7 @@ const Explore: React.FC = () => {
 
     const debounce = setTimeout(searchProfile, 500);
     return () => clearTimeout(debounce);
-  }, [searchTerm]);
+  }, [searchTerm, allProfiles]);
 
   const handleDonate = async (creator: Creator) => {
     if (!wallet || !publicKey) {
@@ -311,50 +394,100 @@ const Explore: React.FC = () => {
               <div className="flex items-center gap-3">
                 <img src={creator.avatar} alt={creator.name} className="w-16 h-16 border-2 border-black object-cover" />
                 <div>
-                  <h3 className="text-xl font-bold flex items-center gap-1">
+                  <Link 
+                    to={`/profile/${creator.id}`}
+                    className="text-xl font-bold flex items-center gap-1 hover:text-tipzo-orange transition-colors cursor-pointer"
+                    title="View profile"
+                  >
                     {creator.name}
                     {creator.verified && <span className="text-blue-600" title="Verified">✓</span>}
-                  </h3>
-                  <p className="text-sm font-semibold opacity-70 break-all">{creator.id.slice(0, 10)}...{creator.id.slice(-4)}</p>
+                  </Link>
+                  <Link 
+                    to={`/profile/${creator.id}`}
+                    className="text-sm font-semibold opacity-70 break-all hover:text-tipzo-orange transition-colors cursor-pointer"
+                    title="View profile"
+                  >
+                    {creator.id.slice(0, 10)}...{creator.id.slice(-4)}
+                  </Link>
                 </div>
               </div>
               <NeoBadge color="bg-white">{creator.category}</NeoBadge>
             </div>
             
-            <p className="font-medium line-clamp-2">{creator.bio}</p>
+            <p className="font-medium line-clamp-2">{creator.bio || "No bio"}</p>
             
-            <div className="mt-auto pt-4 flex flex-col gap-3">
-                <div className="space-y-2">
+            <div className="mt-auto pt-4">
+              {isSearchMode && selectedCreatorForDonation?.id === creator.id ? (
+                // Show donation form only when this creator is selected
+                <div className="flex flex-col gap-3 relative">
+                  <button
+                    onClick={() => {
+                      setSelectedCreatorForDonation(null);
+                      setDonationAmount("1");
+                      setDonationMessage("");
+                    }}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-400 hover:bg-red-500 border-2 border-black flex items-center justify-center shadow-neo-sm transition-colors"
+                    title="Close donation form"
+                  >
+                    <X size={14} className="text-white" />
+                  </button>
+                  <div className="space-y-2">
                     <label className="font-bold text-sm">Donation Amount (ALEO)</label>
                     <NeoInput 
-                        type="number" 
-                        step="0.01"
-                        min="0.01"
-                        value={donationAmount} 
-                        onChange={(e) => setDonationAmount(e.target.value)}
-                        placeholder="1.00"
-                        className="w-full text-lg font-bold border-2 border-black"
-                        autoFocus={false}
+                      type="number" 
+                      step="0.01"
+                      min="0.01"
+                      value={donationAmount} 
+                      onChange={(e) => setDonationAmount(e.target.value)}
+                      placeholder="1.00"
+                      className="w-full text-lg font-bold border-2 border-black"
+                      autoFocus={false}
                     />
-                </div>
-                <div className="space-y-2">
+                  </div>
+                  <div className="space-y-2">
                     <label className="font-bold text-sm">Message (Optional)</label>
                     <NeoInput 
-                        type="text"
-                        value={donationMessage} 
-                        onChange={(e) => setDonationMessage(e.target.value)}
-                        placeholder="Add a message..."
-                        className="w-full border-2 border-black"
-                        maxLength={30}
+                      type="text"
+                      value={donationMessage} 
+                      onChange={(e) => setDonationMessage(e.target.value)}
+                      placeholder="Add a message..."
+                      className="w-full border-2 border-black"
+                      maxLength={30}
                     />
                     <p className="text-xs text-gray-500">Max 30 characters</p>
+                  </div>
+                  <NeoButton 
+                    className="flex-1 flex items-center justify-center gap-2"
+                    onClick={() => handleDonate(creator)}
+                  >
+                    <DollarSign size={18} /> Donate
+                  </NeoButton>
                 </div>
-              <NeoButton 
-                className="flex-1 flex items-center justify-center gap-2"
-                onClick={() => handleDonate(creator)}
-              >
-                <DollarSign size={18} /> Donate
-              </NeoButton>
+              ) : (
+                // Show view profile button in browse mode
+                <div className="flex gap-2">
+                  <NeoButton 
+                    className="flex-1 flex items-center justify-center gap-2"
+                    variant="secondary"
+                    onClick={() => {
+                      // Navigate to profile page
+                      navigate(`/profile/${creator.id}`);
+                    }}
+                  >
+                    <User size={18} /> View Profile
+                  </NeoButton>
+                  <NeoButton 
+                    className="flex items-center justify-center gap-2"
+                    onClick={() => {
+                      // Show donation form for this creator
+                      setSelectedCreatorForDonation(creator);
+                      setIsSearchMode(true);
+                    }}
+                  >
+                    <DollarSign size={18} />
+                  </NeoButton>
+                </div>
+              )}
             </div>
           </NeoCard>
         ))}
@@ -363,11 +496,17 @@ const Explore: React.FC = () => {
       {creators.length === 0 && !loading && (
         <div className="text-center py-20">
           <h3 className="text-2xl font-bold text-gray-400 mb-2">
-            {searchTerm ? (searchError || "No profile found for this address.") : "Search an Aleo address to find creators."}
+            {searchTerm ? (searchError || "No profile found for this address.") : "No profiles found. Search by address or nickname to discover creators."}
           </h3>
           {searchError && (
             <p className="text-sm text-gray-500 mt-2">{searchError}</p>
           )}
+        </div>
+      )}
+      
+      {!searchTerm && creators.length > 0 && (
+        <div className="text-center py-4 text-gray-600 font-medium">
+          Showing {creators.length} profile{creators.length !== 1 ? 's' : ''}. Search to donate.
         </div>
       )}
       

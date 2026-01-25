@@ -219,11 +219,31 @@ function parseDonationRecord(recordString: string): RecordDonation | null {
             return null;
         }
         
+        // Parse timestamp - should be in seconds (Unix timestamp)
+        const rawTimestamp = parseInt(timestampMatch[1], 10);
+        // Validate timestamp is reasonable (between 2020 and 2100 in seconds)
+        // Unix timestamp for 2020-01-01 is 1577836800, for 2100-01-01 is 4102444800
+        const MIN_TIMESTAMP = 1577836800; // 2020-01-01
+        const MAX_TIMESTAMP = 4102444800; // 2100-01-01
+        
+        // If timestamp is too large, it might be in milliseconds - convert to seconds
+        let timestamp = rawTimestamp;
+        if (rawTimestamp > MAX_TIMESTAMP) {
+            console.warn(`[DonationRecords] Timestamp ${rawTimestamp} seems too large, converting from milliseconds to seconds`);
+            timestamp = Math.floor(rawTimestamp / 1000);
+        }
+        
+        // Validate final timestamp
+        if (timestamp < MIN_TIMESTAMP || timestamp > MAX_TIMESTAMP) {
+            console.warn(`[DonationRecords] Invalid timestamp: ${timestamp} (raw: ${rawTimestamp}), using current time as fallback`);
+            timestamp = Math.floor(Date.now() / 1000); // Use current time as fallback
+        }
+        
         const parsed: RecordDonation = {
             owner: ownerMatch[1],
             amount: parseInt(amountMatch[1], 10), // Keep in microcredits
             message: messageMatch?.[1] || "",
-            timestamp: parseInt(timestampMatch[1], 10),
+            timestamp: timestamp,
             nonce: nonceMatch?.[1],
         };
         
