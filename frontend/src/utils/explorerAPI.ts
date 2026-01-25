@@ -73,11 +73,18 @@ export const addKnownProfileAddress = (address: string): boolean => {
 // Seed list of known profile addresses - these are profiles that have been created
 // This list gets populated as profiles are discovered and ensures profiles are visible to all users
 // Even new users in anonymous mode will see these profiles
+// This can be manually updated with known profile addresses to bootstrap discovery
 const getSeedProfileAddresses = (): string[] => {
-    // This is a seed list that can be manually updated or populated from known profiles
-    // For now, we'll rely on localStorage, but this can be extended with a hardcoded list
-    // if needed for initial profile discovery
-    return [];
+    // Seed list of known profile addresses
+    // These are profiles that have been created and should be visible to all users
+    // This list can be manually updated or populated from a central source
+    // For now, we'll use an empty array, but this can be extended
+    const seedAddresses: string[] = [];
+    
+    // You can add known profile addresses here to bootstrap discovery
+    // Example: seedAddresses.push('aleo1...');
+    
+    return seedAddresses;
 };
 
 // Alternative: Try to get profile addresses from Provable Explorer API
