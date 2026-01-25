@@ -72,16 +72,13 @@ const Explore: React.FC = () => {
       // If we have very few profiles, try to discover more from blockchain transactions
       let addressArray = Array.from(knownAddresses);
       
-      // Always try to discover from blockchain if we have less than 50 profiles
+      // Always try to discover from blockchain if we have less than 10 profiles
       // This ensures new profiles are found even if RPC fails sometimes
-      // We increase the threshold to be more aggressive about discovery
-      if (addressArray.length < 50) {
-        // Discovering profiles from blockchain
+      if (addressArray.length < 10) {
+        console.log("[Explore] Few profiles found locally, discovering from blockchain...");
         try {
           const { discoverProfileAddresses } = await import('../utils/explorerAPI');
           const discoveredAddresses = await discoverProfileAddresses();
-          const beforeCount = addressArray.length;
-          
           if (discoveredAddresses.length > 0) {
             discoveredAddresses.forEach(addr => {
               knownAddresses.add(addr);
@@ -90,23 +87,34 @@ const Explore: React.FC = () => {
               }
             });
             addressArray = Array.from(knownAddresses);
-            // Profiles discovered (no logging to reduce console spam)
+            console.log(`[Explore] Discovered ${discoveredAddresses.length} additional profiles from blockchain`);
+          } else {
+            console.log("[Explore] No additional profiles discovered from blockchain transactions");
           }
         } catch (e) {
-          // Discovery failed - silently continue with known addresses
+          console.warn("[Explore] Failed to discover profiles from blockchain:", e);
         }
       }
       
+      // Also check if we can get profiles from a shared seed list or known addresses
+      // This helps when RPC is unavailable
+      if (addressArray.length === 0) {
+        console.log("[Explore] No profiles found. They will appear as users create them or when you search for them.");
+      }
+      
+      // Fetch and verify all known profiles from blockchain
+      console.log(`[Explore] Loading ${addressArray.length} known profiles from blockchain...`);
+      
+      // If no profiles found locally, try to discover from shared storage or seed list
+      if (addressArray.length === 0) {
+        console.log("[Explore] No cached profiles found. Profiles will appear as users create them.");
+      }
+      
       // Fetch profiles in parallel (with limit to avoid too many requests)
-      // This works even without wallet - we're just reading public data from blockchain
       const fetchPromises = addressArray.slice(0, 100).map(async (address) => {
         try {
           const chainProfile = await getProfileFromChain(address);
           if (chainProfile) {
-            // Profile exists on blockchain - cache it for future use
-            // This ensures the profile is available even for new users
-            cacheProfile(address, chainProfile);
-            
             const profileName = chainProfile.name && chainProfile.name.trim() ? chainProfile.name : "Anonymous";
             const cacheInfo = cacheData.get(address);
             const creator: Creator = {
@@ -122,21 +130,8 @@ const Explore: React.FC = () => {
             // Store creation date for sorting (attach to creator object)
             (creator as any).createdAt = cacheInfo?.createdAt || Date.now();
             return creator;
-          } else {
-            // Profile doesn't exist on blockchain - remove from known list
-            // Profile not found on blockchain, removing from list
-            try {
-              const knownList = localStorage.getItem('tipzo_known_profiles');
-              if (knownList) {
-                const addresses = JSON.parse(knownList);
-                const filtered = addresses.filter((addr: string) => addr !== address);
-                localStorage.setItem('tipzo_known_profiles', JSON.stringify(filtered));
-              }
-            } catch (e) {
-              console.warn("Failed to remove invalid profile from list:", e);
-            }
-            return null;
           }
+          return null;
         } catch (e) {
           console.warn(`Failed to fetch profile for ${address}:`, e);
           return null;
@@ -176,7 +171,10 @@ const Explore: React.FC = () => {
         // If we have very few profiles, try to discover more by checking if any profiles exist
         // that we haven't cached yet. This helps new users see existing profiles.
         if (profiles.length === 0) {
-          // No profiles found yet
+          console.log("[Explore] No profiles found. Profiles will appear as they are created or discovered.");
+          console.log("[Explore] Tip: Search for a profile by address to add it to the list.");
+        } else {
+          console.log(`[Explore] Loaded ${profiles.length} profiles`);
         }
       } catch (e) {
         console.error("Failed to load profiles:", e);
@@ -194,15 +192,8 @@ const Explore: React.FC = () => {
     };
     window.addEventListener('profileUpdated', handleProfileUpdate);
     
-    // Also listen for profile discovery events (when profiles are found and cached)
-    const handleProfileDiscovered = () => {
-      loadAllProfiles();
-    };
-    window.addEventListener('profileDiscovered', handleProfileDiscovered);
-    
     return () => {
       window.removeEventListener('profileUpdated', handleProfileUpdate);
-      window.removeEventListener('profileDiscovered', handleProfileDiscovered);
     };
   }, []); // Only run on mount
 
@@ -390,15 +381,8 @@ const Explore: React.FC = () => {
   }, [searchTerm]);
 
   const handleDonate = async (creator: Creator) => {
-    // Check if wallet is connected before allowing donation
     if (!wallet || !publicKey) {
         setShowWalletModal(true);
-        return;
-    }
-    
-    // Prevent self-donation
-    if (creator.id === publicKey) {
-        alert("You cannot donate to yourself!");
         return;
     }
 
@@ -620,21 +604,16 @@ const Explore: React.FC = () => {
                       >
                         <User size={18} /> View Profile
                       </NeoButton>
-                  <NeoButton 
-                    className="flex items-center justify-center gap-2"
-                    onClick={() => {
-                      // Check if wallet is connected before showing donation form
-                      if (!wallet || !publicKey) {
-                        setShowWalletModal(true);
-                        return;
-                      }
-                      // Show donation form for this creator
-                      setSelectedCreatorForDonation(creator);
-                      setIsSearchMode(true);
-                    }}
-                  >
-                    <DollarSign size={18} />
-                  </NeoButton>
+                      <NeoButton 
+                        className="flex items-center justify-center gap-2"
+                        onClick={() => {
+                          // Show donation form for this creator
+                          setSelectedCreatorForDonation(creator);
+                          setIsSearchMode(true);
+                        }}
+                      >
+                        <DollarSign size={18} />
+                      </NeoButton>
                     </div>
                   )}
                 </>
