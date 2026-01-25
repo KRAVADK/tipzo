@@ -83,6 +83,31 @@ const getKnownProfileAddressesFromStorage = (): string[] => {
     }
 };
 
+// Try to get profile addresses from Provable Explorer API by checking program transactions
+// This is a fallback when RPC doesn't work
+const discoverProfilesFromExplorerAPI = async (): Promise<string[]> => {
+    const addresses = new Set<string>();
+    
+    try {
+        // Try to get program information which might include transaction history
+        // Note: Provable Explorer API might not directly support getting all transactions
+        // but we can try to get program details
+        const programUrl = `${EXPLORER_API_BASE}/program/${PROGRAM_ID}`;
+        const response = await fetch(programUrl);
+        
+        if (response.ok) {
+            const data = await response.json();
+            // If the API returns transaction information, extract addresses
+            // This is a placeholder - actual implementation depends on API structure
+            console.log("[Discover] Program data from Explorer API:", data);
+        }
+    } catch (e) {
+        console.warn("[Discover] Failed to get program data from Explorer API:", e);
+    }
+    
+    return Array.from(addresses);
+};
+
 // Helper function to discover profile addresses by scanning transactions
 // This uses Aleo RPC to find all addresses that created or updated profiles
 // Falls back to known addresses from storage if RPC fails
@@ -221,6 +246,16 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
             
             if (!success) {
                 console.warn(`[Discover] All RPC endpoints failed for ${functionName}, using known addresses from storage`);
+                // Try alternative method using Explorer API
+                try {
+                    const explorerAddresses = await discoverProfilesFromExplorerAPI();
+                    explorerAddresses.forEach(addr => addresses.add(addr));
+                    if (explorerAddresses.length > 0) {
+                        console.log(`[Discover] Found ${explorerAddresses.length} addresses via Explorer API`);
+                    }
+                } catch (e) {
+                    console.warn("[Discover] Explorer API method also failed:", e);
+                }
             }
         }
         
