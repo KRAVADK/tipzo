@@ -7,7 +7,7 @@ import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
 import { stringToField } from '../utils/aleo';
-import { getProfileFromChain, cacheProfile } from '../utils/explorerAPI';
+import { getProfileFromChain, cacheProfile, getKnownProfileAddresses, addKnownProfileAddress } from '../utils/explorerAPI';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 
 const Explore: React.FC = () => {
@@ -24,7 +24,109 @@ const Explore: React.FC = () => {
 
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  // Helper function to get all known profiles and verify on blockchain
+  const getAllCachedProfiles = async (): Promise<Creator[]> => {
+    const profilesList: Creator[] = [];
+    try {
+      // Get all known profile addresses (from cache and known list)
+      const allKeys = Object.keys(localStorage);
+      const cacheKeys = allKeys.filter(key => key.startsWith("tipzo_profile_cache_"));
+      const knownAddresses = new Set<string>();
+      
+      // Add addresses from cache
+      for (const key of cacheKeys) {
+        try {
+          const cached = localStorage.getItem(key);
+          if (cached) {
+            const profile = JSON.parse(cached);
+            if (profile.address) {
+              knownAddresses.add(profile.address);
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to parse cached profile:", e);
+        }
+      }
+      
+      // Get known addresses from global list
+      try {
+        const knownList = localStorage.getItem('tipzo_known_profiles');
+        if (knownList) {
+          const addresses = JSON.parse(knownList);
+          addresses.forEach((addr: string) => knownAddresses.add(addr));
+        }
+      } catch (e) {
+        console.warn("Failed to get known profiles list:", e);
+      }
+      
+      // Fetch and verify all known profiles from blockchain
+      const addressArray = Array.from(knownAddresses);
+      console.log(`[Explore] Loading ${addressArray.length} known profiles from blockchain...`);
+      
+      // Fetch profiles in parallel (with limit to avoid too many requests)
+      const fetchPromises = addressArray.slice(0, 50).map(async (address) => {
+        try {
+          const chainProfile = await getProfileFromChain(address);
+          if (chainProfile) {
+            const profileName = chainProfile.name && chainProfile.name.trim() ? chainProfile.name : "Anonymous";
+            return {
+              id: address,
+              name: profileName,
+              handle: address.slice(0, 10) + "...",
+              category: 'User' as const,
+              avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
+              bio: chainProfile.bio || "",
+              verified: false,
+              color: 'white' as const
+            };
+          }
+          return null;
+        } catch (e) {
+          console.warn(`Failed to fetch profile for ${address}:`, e);
+          return null;
+        }
+      });
+      
+      const results = await Promise.all(fetchPromises);
+      const validProfiles = results.filter((p): p is Creator => p !== null);
+      
+      profilesList.push(...validProfiles);
+    } catch (e) {
+      console.warn("Failed to get cached profiles:", e);
+    }
+    return profilesList.sort((a, b) => a.name.localeCompare(b.name));
+  };
 
+  // Load all profiles on component mount and when profile is created
+  useEffect(() => {
+    const loadAllProfiles = async () => {
+      if (!searchTerm) {
+        setLoading(true);
+        try {
+          const profiles = await getAllCachedProfiles();
+          setCreators(profiles);
+          setIsSearchMode(false);
+        } catch (e) {
+          console.error("Failed to load profiles:", e);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    loadAllProfiles();
+
+    // Listen for profile creation/update events
+    const handleProfileUpdate = () => {
+      if (!searchTerm) {
+        loadAllProfiles();
+      }
+    };
+    window.addEventListener('profileUpdated', handleProfileUpdate);
+    
+    return () => {
+      window.removeEventListener('profileUpdated', handleProfileUpdate);
+    };
+  }, [searchTerm]);
 
   // Helper function to search profiles by name in cache
   const searchProfilesByName = (nameQuery: string): string[] => {
@@ -64,10 +166,19 @@ const Explore: React.FC = () => {
       // Check if search term looks like an Aleo address
       const trimmedSearch = searchTerm.trim();
       if (!trimmedSearch) {
-        // If search is empty, clear results
-        setCreators([]);
-        setIsSearchMode(false);
-        setSelectedCreatorForDonation(null);
+        // If search is empty, show all cached profiles
+        setLoading(true);
+        try {
+          const profiles = await getAllCachedProfiles();
+          setCreators(profiles);
+          setIsSearchMode(false);
+          setSelectedCreatorForDonation(null);
+        } catch (e) {
+          console.error("Failed to load profiles:", e);
+          setCreators([]);
+        } finally {
+          setLoading(false);
+        }
         return;
       }
 
@@ -97,7 +208,7 @@ const Explore: React.FC = () => {
             console.log("Search result for", addressToSearch, ":", profile);
             
             if (profile) {
-                // Cache the profile for future name searches
+                // Cache the profile for future name searches and add to known profiles
                 cacheProfile(addressToSearch, profile);
                 
                 // Profile exists - show it even if name is empty
@@ -115,6 +226,9 @@ const Explore: React.FC = () => {
                 setCreators([newCreator]); // Replace list with found profile
                 setSelectedCreatorForDonation(newCreator); // Auto-select for donation
                 setSearchError(null);
+                
+                // Trigger profile list update for other users viewing Explore
+                window.dispatchEvent(new CustomEvent('profileUpdated'));
             } else {
                 // Profile doesn't exist on chain
                 setCreators([]);

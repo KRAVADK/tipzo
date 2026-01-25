@@ -31,6 +31,34 @@ export interface UserProfile {
 
 const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
 
+// Helper function to get list of all known profile addresses
+export const getKnownProfileAddresses = (): string[] => {
+    try {
+        const knownAddresses = localStorage.getItem('tipzo_known_profiles');
+        if (knownAddresses) {
+            return JSON.parse(knownAddresses);
+        }
+        return [];
+    } catch (e) {
+        console.warn("Failed to get known profiles:", e);
+        return [];
+    }
+};
+
+// Helper function to add address to known profiles list
+export const addKnownProfileAddress = (address: string) => {
+    try {
+        const knownAddresses = getKnownProfileAddresses();
+        if (!knownAddresses.includes(address)) {
+            knownAddresses.push(address);
+            localStorage.setItem('tipzo_known_profiles', JSON.stringify(knownAddresses));
+            console.log(`[Cache] Added ${address} to known profiles list`);
+        }
+    } catch (e) {
+        console.warn("Failed to add known profile:", e);
+    }
+};
+
 // Helper function to cache profile in localStorage for nickname search
 export const cacheProfile = (address: string, profile: { name: string; bio: string }) => {
     try {
@@ -41,6 +69,8 @@ export const cacheProfile = (address: string, profile: { name: string; bio: stri
             bio: profile.bio,
             cachedAt: Date.now()
         }));
+        // Add to known profiles list
+        addKnownProfileAddress(address);
         console.log(`[Cache] Cached profile for ${address}:`, profile.name);
     } catch (e) {
         console.warn("Failed to cache profile:", e);
