@@ -15,7 +15,6 @@ const Explore: React.FC = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [creators, setCreators] = useState<Creator[]>([]);
-  const [allProfiles, setAllProfiles] = useState<Creator[]>([]);
   const [loading, setLoading] = useState(false);
   const [donationAmount, setDonationAmount] = useState<string>("1");
   const [donationMessage, setDonationMessage] = useState<string>("");
@@ -26,65 +25,6 @@ const Explore: React.FC = () => {
   const [searchError, setSearchError] = useState<string | null>(null);
 
 
-  // Helper function to get all cached profiles
-  const getAllCachedProfiles = async (): Promise<Creator[]> => {
-    const profilesList: Creator[] = [];
-    try {
-      const allKeys = Object.keys(localStorage);
-      const cacheKeys = allKeys.filter(key => key.startsWith("tipzo_profile_cache_"));
-      
-      for (const key of cacheKeys) {
-        try {
-          const cached = localStorage.getItem(key);
-          if (cached) {
-            const profile = JSON.parse(cached);
-            if (profile.address && profile.name) {
-              // Verify profile still exists on chain
-              const chainProfile = await getProfileFromChain(profile.address);
-              if (chainProfile) {
-                const profileName = chainProfile.name && chainProfile.name.trim() ? chainProfile.name : "Anonymous";
-                profilesList.push({
-                  id: profile.address,
-                  name: profileName,
-                  handle: profile.address.slice(0, 10) + "...",
-                  category: 'User',
-                  avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${profile.address}`,
-                  bio: chainProfile.bio || "",
-                  verified: false,
-                  color: 'white'
-                });
-              }
-            }
-          }
-        } catch (e) {
-          console.warn("Failed to parse cached profile:", e);
-        }
-      }
-    } catch (e) {
-      console.warn("Failed to get cached profiles:", e);
-    }
-    return profilesList.sort((a, b) => a.name.localeCompare(b.name));
-  };
-
-  // Load all profiles on component mount
-  useEffect(() => {
-    const loadAllProfiles = async () => {
-      setLoading(true);
-      try {
-        const profiles = await getAllCachedProfiles();
-        setAllProfiles(profiles);
-        if (!searchTerm) {
-          setCreators(profiles);
-          setIsSearchMode(false);
-        }
-      } catch (e) {
-        console.error("Failed to load profiles:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadAllProfiles();
-  }, []);
 
   // Helper function to search profiles by name in cache
   const searchProfilesByName = (nameQuery: string): string[] => {
@@ -124,16 +64,8 @@ const Explore: React.FC = () => {
       // Check if search term looks like an Aleo address
       const trimmedSearch = searchTerm.trim();
       if (!trimmedSearch) {
-        // If search is empty, show all profiles
-        if (allProfiles.length > 0) {
-          setCreators(allProfiles);
-        } else {
-          // Load all profiles if not loaded yet
-          getAllCachedProfiles().then(profiles => {
-            setAllProfiles(profiles);
-            setCreators(profiles);
-          });
-        }
+        // If search is empty, clear results
+        setCreators([]);
         setIsSearchMode(false);
         setSelectedCreatorForDonation(null);
         return;
@@ -259,7 +191,7 @@ const Explore: React.FC = () => {
 
     const debounce = setTimeout(searchProfile, 500);
     return () => clearTimeout(debounce);
-  }, [searchTerm, allProfiles]);
+  }, [searchTerm]);
 
   const handleDonate = async (creator: Creator) => {
     if (!wallet || !publicKey) {
@@ -496,17 +428,16 @@ const Explore: React.FC = () => {
       {creators.length === 0 && !loading && (
         <div className="text-center py-20">
           <h3 className="text-2xl font-bold text-gray-400 mb-2">
-            {searchTerm ? (searchError || "No profile found for this address.") : "No profiles found. Search by address or nickname to discover creators."}
+            {searchTerm ? (searchError || "No profile found for this address.") : "Search by Aleo address or nickname to discover creators."}
           </h3>
           {searchError && (
             <p className="text-sm text-gray-500 mt-2">{searchError}</p>
           )}
-        </div>
-      )}
-      
-      {!searchTerm && creators.length > 0 && (
-        <div className="text-center py-4 text-gray-600 font-medium">
-          Showing {creators.length} profile{creators.length !== 1 ? 's' : ''}. Search to donate.
+          {!searchTerm && (
+            <p className="text-sm text-gray-500 mt-4">
+              Enter an Aleo address (aleo1...) or search by nickname to find and support creators.
+            </p>
+          )}
         </div>
       )}
       
