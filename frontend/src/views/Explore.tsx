@@ -382,20 +382,80 @@ const Explore: React.FC = () => {
               setSearchError("No profiles found matching your search.");
             }
           } else {
-            // No profiles found in cache - try filtering already loaded profiles
-            const queryLower = trimmedSearch.toLowerCase();
-            const filtered = allProfiles.filter(creator => {
-              const nameMatch = creator.name.toLowerCase().includes(queryLower);
-              const addressMatch = creator.id.toLowerCase().includes(queryLower);
-              return nameMatch || addressMatch;
-            });
+            // No profiles found in cache - try searching in blockchain registry
+            console.log("[Explore] No profiles found in cache, searching blockchain registry...");
             
-            if (filtered.length > 0) {
-              setCreators(filtered);
-              setSearchError(null);
+            // Get all registered profiles from blockchain and search by name
+            const registeredAddresses = await getAllRegisteredProfiles();
+            
+            if (registeredAddresses.length > 0) {
+              const queryLower = trimmedSearch.toLowerCase();
+              const matchingProfiles: Creator[] = [];
+              
+              // Search through registered profiles (limit to first 50 for performance)
+              const searchLimit = Math.min(registeredAddresses.length, 50);
+              for (let i = 0; i < searchLimit; i++) {
+                try {
+                  const address = registeredAddresses[i];
+                  const profile = await getProfileFromChain(address);
+                  
+                  if (profile) {
+                    const profileName = (profile.name || "").toLowerCase();
+                    if (profileName.includes(queryLower)) {
+                      const profileNameDisplay = profile.name && profile.name.trim() ? profile.name : "Anonymous";
+                      matchingProfiles.push({
+                        id: address,
+                        name: profileNameDisplay,
+                        handle: address.slice(0, 10) + "...",
+                        category: 'User',
+                        avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
+                        bio: profile.bio || "",
+                        verified: false,
+                        color: 'white'
+                      });
+                    }
+                  }
+                } catch (e) {
+                  console.warn(`[Explore] Failed to fetch profile for search:`, e);
+                }
+              }
+              
+              if (matchingProfiles.length > 0) {
+                setCreators(matchingProfiles);
+                setSearchError(null);
+              } else {
+                // Also try filtering already loaded profiles
+                const queryLower = trimmedSearch.toLowerCase();
+                const filtered = allProfiles.filter(creator => {
+                  const nameMatch = creator.name.toLowerCase().includes(queryLower);
+                  const addressMatch = creator.id.toLowerCase().includes(trimmedSearch);
+                  return nameMatch || addressMatch;
+                });
+                
+                if (filtered.length > 0) {
+                  setCreators(filtered);
+                  setSearchError(null);
+                } else {
+                  setCreators([]);
+                  setSearchError("No profiles found matching your search. Try searching by Aleo address first.");
+                }
+              }
             } else {
-              setCreators([]);
-              setSearchError("No profiles found matching your search. Try searching by Aleo address first.");
+              // No registered profiles - try filtering already loaded profiles
+              const queryLower = trimmedSearch.toLowerCase();
+              const filtered = allProfiles.filter(creator => {
+                const nameMatch = creator.name.toLowerCase().includes(queryLower);
+                const addressMatch = creator.id.toLowerCase().includes(trimmedSearch);
+                return nameMatch || addressMatch;
+              });
+              
+              if (filtered.length > 0) {
+                setCreators(filtered);
+                setSearchError(null);
+              } else {
+                setCreators([]);
+                setSearchError("No profiles found matching your search. Try searching by Aleo address first.");
+              }
             }
           }
         }
