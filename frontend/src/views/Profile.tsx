@@ -42,6 +42,8 @@ const Profile: React.FC = () => {
         setLoading(true);
         try {
             const addressToFetch = profileAddress || publicKey;
+            if (!addressToFetch) return;
+            
             const data = await getProfileFromChain(addressToFetch);
             if (data) {
                 setProfile({
@@ -51,7 +53,7 @@ const Profile: React.FC = () => {
                 });
                 setExistsOnChain(true);
             } else {
-                setProfile(prev => ({ ...prev, handle: addressToFetch }));
+                setProfile(prev => ({ ...prev, handle: addressToFetch || '' }));
                 setExistsOnChain(false);
             }
         } catch (e) {
@@ -173,7 +175,7 @@ const Profile: React.FC = () => {
 
   // Handle donation for other user's profile
   const handleDonateToProfile = async () => {
-    if (!wallet || !publicKey || !profileAddress) {
+    if (!wallet || !publicKey || !profileAddress || !isViewingOtherProfile) {
         setShowWalletModal(true);
         return;
     }
@@ -298,7 +300,7 @@ const Profile: React.FC = () => {
         <div className="md:col-span-1 space-y-6">
            <NeoCard color="yellow" className="flex flex-col items-center text-center">
              <div className="w-32 h-32 bg-white border-2 border-black mb-4 overflow-hidden">
-               <img src={`https://api.dicebear.com/7.x/identicon/svg?seed=${profileAddress}`} alt="Avatar" className="w-full h-full object-cover" />
+               <img src={`https://api.dicebear.com/7.x/identicon/svg?seed=${profileAddress || publicKey || ''}`} alt="Avatar" className="w-full h-full object-cover" />
              </div>
              <h2 className="text-2xl font-black">{profile.name || "Anonymous"}</h2>
              {!isViewingOtherProfile && (
@@ -310,7 +312,7 @@ const Profile: React.FC = () => {
               <h3 className="font-bold mb-2 flex items-center gap-2">
                 <Wallet size={18}/> {isViewingOtherProfile ? "Wallet Address" : "Wallet Connected"}
               </h3>
-              <p className="text-xs font-mono break-all bg-white p-2 border border-black">{profileAddress}</p>
+              <p className="text-xs font-mono break-all bg-white p-2 border border-black">{profileAddress || publicKey || 'N/A'}</p>
            </NeoCard>
 
            {isViewingOtherProfile && (
