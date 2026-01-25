@@ -30,7 +30,12 @@ export interface UserProfile {
 }
 
 const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
-const ALEO_RPC_URL = "https://testnet3.aleorpc.com";
+// Try multiple RPC endpoints for reliability
+const ALEO_RPC_URLS = [
+    "https://api.testnet.aleo.org/v1",
+    "https://testnet3.aleorpc.com",
+    "https://vm.aleo.org/api/testnet3"
+];
 
 // Helper function to get list of all known profile addresses
 export const getKnownProfileAddresses = (): string[] => {
@@ -70,29 +75,33 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
         const functions = ['create_profile', 'update_profile'];
         
         for (const functionName of functions) {
-            try {
-                const response = await fetch(ALEO_RPC_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        jsonrpc: "2.0",
-                        id: 1,
-                        method: "aleoTransactionsForProgram",
-                        params: {
-                            programId: PROGRAM_ID,
-                            functionName: functionName,
-                            page: 0,
-                            maxTransactions: 1000
-                        }
-                    })
-                });
+            let success = false;
+            // Try each RPC endpoint until one works
+            for (const rpcUrl of ALEO_RPC_URLS) {
+                try {
+                    const response = await fetch(rpcUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            jsonrpc: "2.0",
+                            id: 1,
+                            method: "aleoTransactionsForProgram",
+                            params: {
+                                programId: PROGRAM_ID,
+                                functionName: functionName,
+                                page: 0,
+                                maxTransactions: 1000
+                            }
+                        })
+                    });
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.result && Array.isArray(data.result)) {
-                        console.log(`[Discover] Found ${data.result.length} transactions for ${functionName}`);
-                        
-                        data.result.forEach((tx: any) => {
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.result && Array.isArray(data.result)) {
+                            console.log(`[Discover] Found ${data.result.length} transactions for ${functionName} via ${rpcUrl}`);
+                            success = true;
+                            
+                            data.result.forEach((tx: any) => {
                             // Try multiple ways to extract the caller address
                             let address: string | null = null;
                             
@@ -171,16 +180,25 @@ export const discoverProfileAddresses = async (): Promise<string[]> => {
                                 console.log(`[Discover] Found profile address: ${address} from ${functionName} transaction`);
                             } else {
                                 console.warn(`[Discover] Could not extract address from transaction:`, tx);
-                            }
-                        });
-                    } else if (data.error) {
-                        console.warn(`[Discover] RPC error for ${functionName}:`, data.error);
+                                }
+                            });
+                            break; // Success, no need to try other endpoints
+                        } else if (data.error) {
+                            console.warn(`[Discover] RPC error for ${functionName} from ${rpcUrl}:`, data.error);
+                        }
+                    } else {
+                        console.warn(`[Discover] Failed to fetch from ${rpcUrl} for ${functionName}:`, response.status, response.statusText);
                     }
-                } else {
-                    console.warn(`[Discover] Failed to fetch transactions for ${functionName}:`, response.status, response.statusText);
+                } catch (e) {
+                    console.warn(`[Discover] Exception with ${rpcUrl} for ${functionName}:`, e);
+                    // Continue to next endpoint
                 }
-            } catch (e) {
-                console.warn(`[Discover] Exception getting transactions for ${functionName}:`, e);
+            }
+            
+            if (!success) {
+                console.warn(`[Discover] All RPC endpoints failed for ${functionName}, trying alternative method...`);
+                // Alternative: Try to get profiles by checking known addresses from donation history
+                // This will be handled by the History component
             }
         }
         
