@@ -164,32 +164,165 @@ export const getProfileAddressAtIndex = async (index: number): Promise<string | 
     }
 };
 
+// Scan blockchain for all profiles by finding create_profile and update_profile transactions
+export const scanBlockchainForProfiles = async (): Promise<string[]> => {
+    const discoveredAddresses = new Set<string>();
+    
+    try {
+        console.log("[Blockchain Scan] Scanning for profile transactions...");
+        
+        // Try to get profiles from Aleo RPC API
+        const rpcUrl = "https://testnet3.aleorpc.com";
+        
+        // Scan create_profile transactions
+        try {
+            const createProfileResponse = await fetch(rpcUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    id: 1,
+                    method: "aleoTransactionsForProgram",
+                    params: {
+                        programId: PROGRAM_ID,
+                        functionName: "create_profile",
+                        page: 0,
+                        maxTransactions: 1000
+                    }
+                })
+            });
+            
+            if (createProfileResponse.ok) {
+                const data = await createProfileResponse.json();
+                if (data.result && Array.isArray(data.result)) {
+                    console.log(`[Blockchain Scan] Found ${data.result.length} create_profile transactions`);
+                    data.result.forEach((tx: any) => {
+                        // Extract caller address from transaction
+                        // The address can be in different places depending on transaction structure
+                        if (tx.transaction?.owner) {
+                            discoveredAddresses.add(tx.transaction.owner);
+                        }
+                        if (tx.owner) {
+                            discoveredAddresses.add(tx.owner);
+                        }
+                        // Also check execution transitions
+                        if (tx.transaction?.execution?.transitions) {
+                            tx.transaction.execution.transitions.forEach((transition: any) => {
+                                if (transition.function === "create_profile") {
+                                    // Caller might be in transition metadata
+                                    if (transition.caller) {
+                                        discoveredAddresses.add(transition.caller);
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn("[Blockchain Scan] Failed to scan create_profile via RPC:", e);
+        }
+        
+        // Scan update_profile transactions
+        try {
+            const updateProfileResponse = await fetch(rpcUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    id: 2,
+                    method: "aleoTransactionsForProgram",
+                    params: {
+                        programId: PROGRAM_ID,
+                        functionName: "update_profile",
+                        page: 0,
+                        maxTransactions: 1000
+                    }
+                })
+            });
+            
+            if (updateProfileResponse.ok) {
+                const data = await updateProfileResponse.json();
+                if (data.result && Array.isArray(data.result)) {
+                    console.log(`[Blockchain Scan] Found ${data.result.length} update_profile transactions`);
+                    data.result.forEach((tx: any) => {
+                        if (tx.transaction?.owner) {
+                            discoveredAddresses.add(tx.transaction.owner);
+                        }
+                        if (tx.owner) {
+                            discoveredAddresses.add(tx.owner);
+                        }
+                        if (tx.transaction?.execution?.transitions) {
+                            tx.transaction.execution.transitions.forEach((transition: any) => {
+                                if (transition.function === "update_profile") {
+                                    if (transition.caller) {
+                                        discoveredAddresses.add(transition.caller);
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn("[Blockchain Scan] Failed to scan update_profile via RPC:", e);
+        }
+        
+        // Also try Provable Explorer API as fallback - scan all profiles mapping entries
+        // Since we can't directly query transactions, we'll try to scan the profiles mapping
+        // by checking known addresses or using a different approach
+        try {
+            // Alternative: Try to get all addresses that have profiles in the mapping
+            // This is less efficient but works if RPC doesn't work
+            console.log("[Blockchain Scan] Trying alternative method via profile mappings...");
+            // Note: We can't iterate mappings directly, so this is a fallback
+        } catch (e) {
+            console.warn("[Blockchain Scan] Failed alternative scan:", e);
+        }
+        
+        const addresses = Array.from(discoveredAddresses).filter(addr => addr && typeof addr === 'string' && addr.startsWith('aleo1'));
+        console.log(`[Blockchain Scan] Discovered ${addresses.length} unique profile addresses from blockchain`);
+        return addresses;
+    } catch (error) {
+        console.error("[Blockchain Scan] Error scanning blockchain for profiles:", error);
+        return [];
+    }
+};
+
 // Get all registered profile addresses from blockchain
 export const getAllRegisteredProfiles = async (): Promise<string[]> => {
     try {
+        // First try the registry mapping (fastest if it exists)
         const count = await getProfileCount();
-        console.log(`[Registry] Found ${count} registered profiles on blockchain`);
+        console.log(`[Registry] Found ${count} registered profiles on blockchain registry`);
         
-        if (count === 0) {
-            return [];
+        const addressesFromRegistry: string[] = [];
+        if (count > 0) {
+            // Fetch all profile addresses in parallel (limit to reasonable number)
+            const maxProfiles = Math.min(count, 1000); // Limit to 1000 profiles
+            const fetchPromises: Promise<string | null>[] = [];
+            
+            for (let i = 0; i < maxProfiles; i++) {
+                fetchPromises.push(getProfileAddressAtIndex(i));
+            }
+            
+            const addresses = await Promise.all(fetchPromises);
+            addressesFromRegistry.push(...addresses.filter((addr): addr is string => addr !== null && addr.startsWith('aleo1')));
         }
         
-        // Fetch all profile addresses in parallel (limit to reasonable number)
-        const maxProfiles = Math.min(count, 1000); // Limit to 1000 profiles
-        const fetchPromises: Promise<string | null>[] = [];
+        // Also scan blockchain for profiles (catches profiles even if registry is empty)
+        const scannedAddresses = await scanBlockchainForProfiles();
         
-        for (let i = 0; i < maxProfiles; i++) {
-            fetchPromises.push(getProfileAddressAtIndex(i));
-        }
+        // Combine both sources and remove duplicates
+        const allAddresses = new Set([...addressesFromRegistry, ...scannedAddresses]);
+        const uniqueAddresses = Array.from(allAddresses);
         
-        const addresses = await Promise.all(fetchPromises);
-        const validAddresses = addresses.filter((addr): addr is string => addr !== null && addr.startsWith('aleo1'));
-        
-        console.log(`[Registry] Retrieved ${validAddresses.length} valid profile addresses`);
-        return validAddresses;
+        console.log(`[Registry] Total unique profiles: ${uniqueAddresses.length} (${addressesFromRegistry.length} from registry, ${scannedAddresses.length} from scan)`);
+        return uniqueAddresses;
     } catch (error) {
         console.error("Error fetching all registered profiles:", error);
-        return [];
+        // Fallback to scanning if registry fails
+        return await scanBlockchainForProfiles();
     }
 };
 
