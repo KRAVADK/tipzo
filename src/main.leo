@@ -1,7 +1,8 @@
 program tipzo_app_v6.aleo {
     // This is the constructor for the program.
     // It is called when the program is deployed.
-    // Version 6: Public profile registry - profiles are automatically registered and discoverable
+    // Version 6.1: Public profile registry - profiles are automatically registered and discoverable
+    // Both create_profile and update_profile ensure profiles are in the registry
     @noupgrade
     async constructor() {}
 
@@ -116,7 +117,7 @@ program tipzo_app_v6.aleo {
     }
 
     // Update profile
-    // Updates existing profile (doesn't add to registry if already exists)
+    // Updates existing profile and ensures it's in registry (adds if missing)
     async transition update_profile(public name: field, public bio: field) -> Future {
         return finalize_update_profile(self.caller, name, bio);
     }
@@ -127,7 +128,25 @@ program tipzo_app_v6.aleo {
             bio: bio
         };
         Mapping::set(profiles, user, info);
-        // Profile is already in registry from create_profile, so no need to add again
+        
+        // Check if profile is registered - if not, add it to registry
+        // This ensures profiles created in older versions or missed somehow are still discoverable
+        let registered: bool = Mapping::get(is_registered, user);
+        
+        if (!registered) {
+            // Get current profile count
+            let count_key: u64 = 0u64;
+            let current_count: u64 = Mapping::get(profile_count, count_key);
+            
+            // Add user to active_profiles at index = current_count
+            Mapping::set(active_profiles, current_count, user);
+            
+            // Mark as registered
+            Mapping::set(is_registered, user, true);
+            
+            // Increment profile count
+            Mapping::set(profile_count, count_key, current_count + 1u64);
+        }
     }
 
     // View function to read profile from mapping (public, async for mapping access)
