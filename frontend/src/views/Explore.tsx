@@ -7,7 +7,7 @@ import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
 import { stringToField } from '../utils/aleo';
-import { getProfileFromChain, cacheProfile, getAllRegisteredProfiles, addKnownProfileAddress } from '../utils/explorerAPI';
+import { getProfileFromChain, cacheProfile, getAllRegisteredProfiles, addKnownProfileAddress, getKnownProfileAddresses } from '../utils/explorerAPI';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 
 const Explore: React.FC = () => {
@@ -194,20 +194,16 @@ const Explore: React.FC = () => {
       setLoading(true);
 
       try {
-        // Search DIRECTLY in blockchain - get all profiles and filter
-        console.log(`[Search] Searching blockchain for: "${trimmedSearch}"`);
+        // Search DIRECTLY in blockchain - NO CACHE
+        console.log(`[Search] Searching blockchain for: "${trimmedSearch}" (NO CACHE)`);
         
-        // Get all profiles from blockchain
-        const allProfiles = await getAllRegisteredProfiles();
-        console.log(`[Search] Found ${allProfiles.length} profiles on blockchain`);
-        
-        // Fetch profile data for all addresses and filter
         const queryLower = trimmedSearch.toLowerCase();
         const matchingProfiles: Creator[] = [];
         
         // Search by address first (if it's an address)
         if (trimmedSearch.startsWith("aleo1")) {
-          // Direct address search - fetch profile directly
+          // Direct address search - fetch profile directly from blockchain
+          console.log(`[Search] Searching by address: ${trimmedSearch}`);
           const profile = await getProfileFromChain(trimmedSearch);
           if (profile) {
             const creator: Creator = {
@@ -224,8 +220,20 @@ const Explore: React.FC = () => {
             console.log(`[Search] ✅ Found by address: ${creator.name}`);
           }
         } else {
-          // Search by name/bio - fetch all profiles and filter
-          const fetchPromises = allProfiles.slice(0, 100).map(async (address) => {
+          // Search by name/bio - get ALL profiles from blockchain and filter
+          console.log(`[Search] Searching by name/bio: "${trimmedSearch}"`);
+          
+          // Get all profile addresses from blockchain
+          const allProfileAddresses = await getAllRegisteredProfiles();
+          console.log(`[Search] Found ${allProfileAddresses.length} profile addresses on blockchain`);
+          
+          // Also check known addresses (in case they're not in registry yet)
+          const knownAddresses = getKnownProfileAddresses();
+          const allAddresses = new Set([...allProfileAddresses, ...knownAddresses]);
+          console.log(`[Search] Total addresses to check: ${allAddresses.size}`);
+          
+          // Fetch profile data for all addresses and filter by name/bio
+          const fetchPromises = Array.from(allAddresses).slice(0, 200).map(async (address) => {
             try {
               const profile = await getProfileFromChain(address);
               if (profile) {
@@ -235,6 +243,7 @@ const Explore: React.FC = () => {
                 const bioMatch = bioLower.includes(queryLower);
                 
                 if (nameMatch || bioMatch) {
+                  console.log(`[Search] ✅ Match found: ${profile.name} (name: "${nameLower}", bio: "${bioLower}")`);
                   return {
                     id: address,
                     name: profile.name && profile.name.trim() ? profile.name : "Anonymous",
@@ -266,8 +275,6 @@ const Explore: React.FC = () => {
           setSearchError(null);
         } else {
           console.log(`[Search] ❌ No profiles found in blockchain for "${trimmedSearch}"`);
-        
-          // Not found in blockchain
           setCreators([]);
           setSearchError("No profiles found matching your search.");
         }
