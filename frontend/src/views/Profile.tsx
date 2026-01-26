@@ -3,7 +3,7 @@ import { NeoCard, NeoButton, NeoInput, NeoTextArea, WalletRequiredModal } from '
 import { UserProfile } from '../utils/explorerAPI';
 import { Save, Wallet, Loader2, DollarSign, X } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
-import { getProfileFromChain, cacheProfile, addKnownProfileAddress } from '../utils/explorerAPI';
+import { getProfileFromChain, addKnownProfileAddress } from '../utils/explorerAPI';
 import { stringToField } from '../utils/aleo';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 import { WalletAdapterNetwork } from '@demox-labs/aleo-wallet-adapter-base';
@@ -44,30 +44,7 @@ const Profile: React.FC = () => {
             const addressToFetch = profileAddress || publicKey;
             if (!addressToFetch) return;
             
-            // First, try to get from cache (fast, works offline)
-            const cacheKey = `tipzo_profile_cache_${addressToFetch}`;
-            const cached = localStorage.getItem(cacheKey);
-            
-            if (cached) {
-              try {
-                const cachedData = JSON.parse(cached);
-                if (cachedData.name || cachedData.bio) {
-                  console.log("[Profile] Loading from cache:", cachedData);
-                  setProfile({
-                    name: cachedData.name || '',
-                    bio: cachedData.bio || '',
-                    handle: addressToFetch
-                  });
-                  setExistsOnChain(true);
-                  setLoading(false);
-                  // Still try to fetch from chain in background to get latest data
-                }
-              } catch (e) {
-                console.warn("[Profile] Failed to parse cached profile:", e);
-              }
-            }
-            
-            // Try to fetch from chain (may be slow or fail)
+            // Fetch directly from blockchain (no cache)
             const data = await getProfileFromChain(addressToFetch);
             if (data) {
                 console.log("[Profile] Loaded from chain:", data);
@@ -77,12 +54,11 @@ const Profile: React.FC = () => {
                     handle: addressToFetch
                 });
                 setExistsOnChain(true);
-            } else if (!cached) {
-                // No data from chain and no cache
+            } else {
+                // No data from chain
                 setProfile(prev => ({ ...prev, handle: addressToFetch || '' }));
                 setExistsOnChain(false);
             }
-            // If we have cache but no chain data, keep cache data (already set above)
         } catch (e) {
             console.error("Error fetching profile", e);
         } finally {
@@ -184,27 +160,13 @@ const Profile: React.FC = () => {
                 }));
                 setExistsOnChain(true);
                 
-                // Cache the profile IMMEDIATELY - this is critical for search to work
+                // Add to known profiles list (for blockchain scanning)
                 if (publicKey) {
-                    const profileData = {
-                        name: name,
-                        bio: bio
-                    };
-                    // Cache with skipEvent=false to trigger profileCached event
-                    cacheProfile(publicKey, profileData, existsOnChain ? undefined : Date.now(), false);
-                    
-                    // Add to known profiles list (for local discovery)
                     addKnownProfileAddress(publicKey);
-                    
-                    // Verify it was cached
-                    const cacheKey = `tipzo_profile_cache_${publicKey}`;
-                    const verifyCache = localStorage.getItem(cacheKey);
-                    console.log("[Profile] Profile saved and cached:", { 
+                    console.log("[Profile] Profile saved:", { 
                         name, 
                         bio, 
-                        address: publicKey,
-                        cached: !!verifyCache,
-                        cacheData: verifyCache ? JSON.parse(verifyCache) : null
+                        address: publicKey
                     });
                     
                     // CRITICAL: Dispatch profileUpdated event to refresh Explore

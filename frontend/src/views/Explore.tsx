@@ -7,7 +7,7 @@ import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
 import { stringToField } from '../utils/aleo';
-import { getProfileFromChain, cacheProfile, getAllRegisteredProfiles, addKnownProfileAddress, getKnownProfileAddresses } from '../utils/explorerAPI';
+import { getProfileFromChain, getAllRegisteredProfiles, addKnownProfileAddress, getKnownProfileAddresses } from '../utils/explorerAPI';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 
 const Explore: React.FC = () => {
@@ -82,10 +82,7 @@ const Explore: React.FC = () => {
               const profileBio = chainProfile.bio || "";
               console.log(`[Explore] Loaded from blockchain: ${profileName} (${address.slice(0, 10)}...)`);
               
-              // Cache it for performance (but don't rely on it for display)
-              if (profileName !== "Anonymous" || profileBio) {
-                cacheProfile(address, { name: profileName, bio: profileBio }, undefined, true);
-              }
+              // No caching - all data comes from blockchain
               
               const cacheInfo = cacheData.get(address);
               const creator: Creator = {
@@ -165,14 +162,12 @@ const Explore: React.FC = () => {
     };
     
     window.addEventListener('profileUpdated', handleProfileEvent);
-    window.addEventListener('profileCached', handleProfileEvent);
     
     return () => {
       if (debounceTimer) {
         clearTimeout(debounceTimer);
       }
       window.removeEventListener('profileUpdated', handleProfileEvent);
-      window.removeEventListener('profileCached', handleProfileEvent);
     };
   }, []); // Only run on mount
 
