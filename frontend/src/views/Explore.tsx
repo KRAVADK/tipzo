@@ -7,7 +7,7 @@ import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
 import { stringToField } from '../utils/aleo';
-import { getProfileFromChain, cacheProfile, getAllRegisteredProfiles, getPublicProfilesRegistry } from '../utils/explorerAPI';
+import { getProfileFromChain, cacheProfile, getAllRegisteredProfiles, getPublicProfilesRegistry, addKnownProfileAddress } from '../utils/explorerAPI';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 
 const Explore: React.FC = () => {
@@ -43,9 +43,9 @@ const Explore: React.FC = () => {
         // STEP 1: Get all registered profiles from multiple sources
         console.log("[Explore] Fetching registered profiles from multiple sources...");
         
-        // Try blockchain registry first
+        // Try blockchain registry and scan (this automatically finds ALL profiles from create_profile/update_profile transactions)
         const blockchainAddresses = await getAllRegisteredProfiles();
-        console.log(`[Explore] Found ${blockchainAddresses.length} registered profiles on blockchain`);
+        console.log(`[Explore] Found ${blockchainAddresses.length} registered profiles from blockchain (registry + scan)`);
         
         // Try public registry (GitHub/Netlify) as fallback
         const publicRegistryAddresses = await getPublicProfilesRegistry();
@@ -54,6 +54,14 @@ const Explore: React.FC = () => {
         // Combine all addresses
         const registeredAddresses = Array.from(new Set([...blockchainAddresses, ...publicRegistryAddresses]));
         console.log(`[Explore] Total unique profiles from all sources: ${registeredAddresses.length}`);
+        
+        // Automatically add all discovered addresses to known profiles list
+        if (blockchainAddresses.length > 0) {
+            blockchainAddresses.forEach(addr => {
+                addKnownProfileAddress(addr);
+            });
+            console.log(`[Explore] Added ${blockchainAddresses.length} addresses to known profiles list`);
+        }
         
         // STEP 2: Also get cached profiles (for backward compatibility and to show ALL profiles)
         const allKeys = Object.keys(localStorage);
