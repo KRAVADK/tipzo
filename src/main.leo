@@ -1,9 +1,10 @@
-program tipzo_app_v6.aleo {
+program tipzo_app_v7.aleo {
     // This is the constructor for the program.
     // It is called when the program is deployed.
-    // Version 6.1: Public profile registry - profiles are automatically registered and discoverable
+    // Version 7: Public profile registry - profiles are automatically registered and discoverable
     // Both create_profile and update_profile ensure profiles are in the registry
-    @noupgrade
+    // Using @admin to allow future upgrades (admin is the deployer address)
+    @admin(address = "aleo1djs0erk6tcruhjkgcfut8z4cucx9ctr4x27huk9cx3phlkmwpuqs6qahh3")
     async constructor() {}
 
     // Profile information struct
