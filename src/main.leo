@@ -98,13 +98,14 @@ program tipzo_app_v7.aleo {
         Mapping::set(profiles, user, info);
         
         // Check if profile is already registered
-        let registered: bool = Mapping::get(is_registered, user);
+        // Use get_or_use to safely get value (returns false if key doesn't exist)
+        let registered: bool = Mapping::get_or_use(is_registered, user, false);
         
         // Only register in public list if not already registered
         if (!registered) {
-            // Get current profile count
+            // Get current profile count (use 0u64 as default if not initialized)
             let count_key: u64 = 0u64;
-            let current_count: u64 = Mapping::get(profile_count, count_key);
+            let current_count: u64 = Mapping::get_or_use(profile_count, count_key, 0u64);
             
             // Add user to active_profiles at index = current_count
             Mapping::set(active_profiles, current_count, user);
@@ -132,12 +133,13 @@ program tipzo_app_v7.aleo {
         
         // Check if profile is registered - if not, add it to registry
         // This ensures profiles created in older versions or missed somehow are still discoverable
-        let registered: bool = Mapping::get(is_registered, user);
+        // Use get_or_use to safely get value (returns false if key doesn't exist)
+        let registered: bool = Mapping::get_or_use(is_registered, user, false);
         
         if (!registered) {
-            // Get current profile count
+            // Get current profile count (use 0u64 as default if not initialized)
             let count_key: u64 = 0u64;
-            let current_count: u64 = Mapping::get(profile_count, count_key);
+            let current_count: u64 = Mapping::get_or_use(profile_count, count_key, 0u64);
             
             // Add user to active_profiles at index = current_count
             Mapping::set(active_profiles, current_count, user);
@@ -168,7 +170,7 @@ program tipzo_app_v7.aleo {
     
     async function finalize_get_profile_count() {
         let count_key: u64 = 0u64;
-        let count: u64 = Mapping::get(profile_count, count_key);
+        let count: u64 = Mapping::get_or_use(profile_count, count_key, 0u64);
         // Count is accessible via transaction output
     }
     
