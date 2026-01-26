@@ -7,7 +7,7 @@ import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
 import { stringToField } from '../utils/aleo';
-import { getProfileFromChain, cacheProfile, getAllRegisteredProfiles, getPublicProfilesRegistry, addKnownProfileAddress } from '../utils/explorerAPI';
+import { getProfileFromChain, cacheProfile, getAllRegisteredProfiles, addKnownProfileAddress } from '../utils/explorerAPI';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 
 const Explore: React.FC = () => {
@@ -24,36 +24,30 @@ const Explore: React.FC = () => {
 
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  // Load all profiles on component mount and when profile is created
-  useEffect(() => {
-    let debounceTimer: NodeJS.Timeout | null = null;
-    let isReloading = false;
+  // Load all profiles function - uses Provable API v2 directly from blockchain
+  let isReloading = false;
+  const loadAllProfiles = async () => {
+    // Prevent multiple simultaneous reloads
+    if (isReloading) {
+      return;
+    }
     
-    const loadAllProfiles = async () => {
-      // Prevent multiple simultaneous reloads
-      if (isReloading) {
-        return;
-      }
-      
-      isReloading = true;
-      setLoading(true);
-      try {
+    isReloading = true;
+    setLoading(true);
+    try {
         const profilesList: Creator[] = [];
         
-        // STEP 1: Get all registered profiles from multiple sources
-        console.log("[Explore] Fetching registered profiles from multiple sources...");
+        // STEP 1: Get all registered profiles DIRECTLY from blockchain using Provable API v2
+        // NO CACHE - all profiles come from blockchain
+        console.log("[Explore] Fetching registered profiles directly from blockchain (Provable API v2)...");
         
-        // Try blockchain registry and scan (this automatically finds ALL profiles from create_profile/update_profile transactions)
+        // Primary source: Scan blockchain for all profile transactions (create_profile/update_profile)
         const blockchainAddresses = await getAllRegisteredProfiles();
-        console.log(`[Explore] Found ${blockchainAddresses.length} registered profiles from blockchain (registry + scan)`);
+        console.log(`[Explore] Found ${blockchainAddresses.length} registered profiles from blockchain scan`);
         
-        // Try public registry (GitHub/Netlify) as fallback
-        const publicRegistryAddresses = await getPublicProfilesRegistry();
-        console.log(`[Explore] Found ${publicRegistryAddresses.length} profiles from public registry`);
-        
-        // Combine all addresses
-        const registeredAddresses = Array.from(new Set([...blockchainAddresses, ...publicRegistryAddresses]));
-        console.log(`[Explore] Total unique profiles from all sources: ${registeredAddresses.length}`);
+        // Combine all addresses (no public registry fallback - pure blockchain)
+        const registeredAddresses = Array.from(new Set(blockchainAddresses));
+        console.log(`[Explore] Total unique profiles from blockchain: ${registeredAddresses.length}`);
         
         // Automatically add all discovered addresses to known profiles list
         if (blockchainAddresses.length > 0) {
@@ -63,82 +57,36 @@ const Explore: React.FC = () => {
             console.log(`[Explore] Added ${blockchainAddresses.length} addresses to known profiles list`);
         }
         
-        // STEP 2: Also get cached profiles (for backward compatibility and to show ALL profiles)
-        const allKeys = Object.keys(localStorage);
-        const cacheKeys = allKeys.filter(key => key.startsWith("tipzo_profile_cache_"));
+        // STEP 2: Use ONLY blockchain addresses (NO CACHE)
+        // All profiles come directly from blockchain via Provable API v2
         const allAddresses = new Set<string>(registeredAddresses);
         const cacheData = new Map<string, { createdAt: number }>();
         
-        console.log(`[Explore] Found ${cacheKeys.length} cached profile keys`);
-        
-        // Add addresses from cache - THIS IS CRITICAL to show all profiles
-        for (const key of cacheKeys) {
-          try {
-            const cached = localStorage.getItem(key);
-            if (cached) {
-              const profile = JSON.parse(cached);
-              if (profile.address) {
-                allAddresses.add(profile.address);
-                cacheData.set(profile.address, {
-                  createdAt: profile.createdAt || profile.cachedAt || Date.now()
-                });
-                console.log(`[Explore] Added from cache: ${profile.name || 'Anonymous'} (${profile.address.slice(0, 10)}...)`);
-              }
-            }
-          } catch (e) {
-            console.warn("Failed to parse cached profile:", e);
-          }
-        }
-        
-        // Add known addresses from global list
-        try {
-          const knownList = localStorage.getItem('tipzo_known_profiles');
-          if (knownList) {
-            const addresses = JSON.parse(knownList);
-            addresses.forEach((addr: string) => {
-              allAddresses.add(addr);
-              if (!cacheData.has(addr)) {
-                cacheData.set(addr, { createdAt: Date.now() });
-              }
-            });
-          }
-        } catch (e) {
-          console.warn("Failed to get known profiles list:", e);
-        }
+        // Set creation time for sorting (use current time as fallback)
+        registeredAddresses.forEach(addr => {
+          cacheData.set(addr, { createdAt: Date.now() });
+        });
         
         const addressArray = Array.from(allAddresses);
-        console.log(`[Explore] Total profiles to load: ${addressArray.length} (${registeredAddresses.length} from registry, ${addressArray.length - registeredAddresses.length} from cache/known)`);
+        console.log(`[Explore] Total profiles to load from blockchain: ${addressArray.length}`);
         console.log(`[Explore] All addresses to load:`, addressArray.map(addr => addr.slice(0, 10) + '...'));
         
-        // STEP 3: Load all profiles (from cache first, then update from blockchain if needed)
+        // STEP 3: Load all profiles DIRECTLY from blockchain (NO CACHE)
+        // All profiles come from Provable API v2 - fresh data every time
         const fetchPromises = addressArray.slice(0, 200).map(async (address) => {
           try {
-            // Check cache first - ALWAYS use cache if available
-            const cacheKey = `tipzo_profile_cache_${address}`;
-            const cached = localStorage.getItem(cacheKey);
-            
-            let profileName: string = "Anonymous";
-            let profileBio: string = "";
-            let hasCache = false;
-            let cacheCreatedAt: number = Date.now();
-            
-            // Load from cache if available - THIS IS THE PRIMARY SOURCE
-            if (cached) {
-              try {
-                const cachedData = JSON.parse(cached);
-                profileName = cachedData.name || "Anonymous";
-                profileBio = cachedData.bio || "";
-                cacheCreatedAt = cachedData.createdAt || cachedData.cachedAt || Date.now();
-                hasCache = true;
-                console.log(`[Explore] Loaded from cache: ${profileName} (${address.slice(0, 10)}...)`);
-              } catch (e) {
-                console.warn(`[Explore] Failed to parse cache for ${address}:`, e);
+            // Fetch DIRECTLY from blockchain - no cache
+            const chainProfile = await getProfileFromChain(address);
+            if (chainProfile) {
+              const profileName = chainProfile.name && chainProfile.name.trim() ? chainProfile.name : "Anonymous";
+              const profileBio = chainProfile.bio || "";
+              console.log(`[Explore] Loaded from blockchain: ${profileName} (${address.slice(0, 10)}...)`);
+              
+              // Cache it for performance (but don't rely on it for display)
+              if (profileName !== "Anonymous" || profileBio) {
+                cacheProfile(address, { name: profileName, bio: profileBio }, undefined, true);
               }
-            }
-            
-            // CRITICAL: If we have cache, return it immediately (don't wait for chain)
-            // This ensures ALL cached profiles are shown, even if chain is slow
-            if (hasCache && (profileName !== "Anonymous" || profileBio)) {
+              
               const cacheInfo = cacheData.get(address);
               const creator: Creator = {
                 id: address,
@@ -150,60 +98,14 @@ const Explore: React.FC = () => {
                 verified: false,
                 color: 'white' as const
               };
-              (creator as any).createdAt = cacheInfo?.createdAt || cacheCreatedAt;
+              (creator as any).createdAt = cacheInfo?.createdAt || Date.now();
               
-              console.log(`[Explore] ✅ Returning cached profile: ${creator.name} (${address.slice(0, 10)}...)`);
-              
-              // Try to update from chain in background (non-blocking)
-              getProfileFromChain(address).then(chainProfile => {
-                if (chainProfile && (chainProfile.name !== profileName || chainProfile.bio !== profileBio)) {
-                  console.log(`[Explore] Background update from chain: ${chainProfile.name} (${address.slice(0, 10)}...)`);
-                  cacheProfile(address, { name: chainProfile.name, bio: chainProfile.bio }, cacheCreatedAt, true);
-                  // Trigger a refresh to show updated data
-                  window.dispatchEvent(new CustomEvent('profileUpdated'));
-                }
-              }).catch(() => {
-                // Silently fail - we already have cache
-              });
-              
+              console.log(`[Explore] ✅ Returning blockchain profile: ${creator.name} (${address.slice(0, 10)}...)`);
               return creator;
+            } else {
+              console.log(`[Explore] No profile data found for ${address.slice(0, 10)}...`);
+              return null;
             }
-            
-            // No cache - try to fetch from chain
-            try {
-              const chainProfile = await getProfileFromChain(address);
-              if (chainProfile) {
-                profileName = chainProfile.name && chainProfile.name.trim() ? chainProfile.name : "Anonymous";
-                profileBio = chainProfile.bio || "";
-                console.log(`[Explore] Loaded from chain: ${profileName} (${address.slice(0, 10)}...)`);
-                
-                // Cache it for future use
-                if (profileName !== "Anonymous" || profileBio) {
-                  cacheProfile(address, { name: profileName, bio: profileBio }, undefined, true);
-                }
-                
-                const cacheInfo = cacheData.get(address);
-                const creator: Creator = {
-                  id: address,
-                  name: profileName || "Anonymous",
-                  handle: address.slice(0, 10) + "...",
-                  category: 'User' as const,
-                  avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
-                  bio: profileBio || "",
-                  verified: false,
-                  color: 'white' as const
-                };
-                (creator as any).createdAt = cacheInfo?.createdAt || Date.now();
-                
-                console.log(`[Explore] ✅ Returning chain profile: ${creator.name} (${address.slice(0, 10)}...)`);
-                return creator;
-              }
-            } catch (e) {
-              console.log(`[Explore] Chain fetch failed for ${address}, no cache available`);
-            }
-            
-            // No data at all - skip
-            return null;
           } catch (e) {
             console.warn(`[Explore] ❌ Failed to fetch profile for ${address}:`, e);
             return null;
@@ -243,7 +145,11 @@ const Explore: React.FC = () => {
         setLoading(false);
         isReloading = false;
       }
-    };
+  };
+  
+  // Load all profiles on component mount and when profile is created
+  useEffect(() => {
+    let debounceTimer: NodeJS.Timeout | null = null;
     
     // Always load all profiles on mount
     loadAllProfiles();
@@ -270,71 +176,17 @@ const Explore: React.FC = () => {
     };
   }, []); // Only run on mount
 
-  // Helper function to get all profiles from cache only (no blockchain calls)
-  const getAllProfilesFromCache = (): Creator[] => {
-    const profilesList: Creator[] = [];
-    try {
-      const allKeys = Object.keys(localStorage);
-      const cacheKeys = allKeys.filter(key => key.startsWith("tipzo_profile_cache_"));
-      
-      console.log(`[Explore] Found ${cacheKeys.length} cached profile keys`);
-      
-      for (const key of cacheKeys) {
-        try {
-          const cached = localStorage.getItem(key);
-          if (cached) {
-            const profile = JSON.parse(cached);
-            if (profile.address) {
-              const profileName = profile.name && profile.name.trim() ? profile.name : "Anonymous";
-              const profileBio = profile.bio || "";
-              const creator: Creator = {
-                id: profile.address,
-                name: profileName,
-                handle: profile.address.slice(0, 10) + "...",
-                category: 'User' as const,
-                avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${profile.address}`,
-                bio: profileBio,
-                verified: false,
-                color: 'white' as const
-              };
-              profilesList.push(creator);
-              console.log(`[Explore] Loaded from cache: ${profileName} (${profile.address.slice(0, 10)}...) - name: "${profileName}", bio: "${profileBio}"`);
-            } else {
-              console.warn(`[Explore] Profile in cache missing address:`, profile);
-            }
-          }
-        } catch (e) {
-          console.warn("Failed to parse cached profile:", e, key);
-        }
-      }
-      
-      console.log(`[Explore] Total profiles loaded from cache: ${profilesList.length}`);
-      console.log(`[Explore] Profile names in cache:`, profilesList.map(c => `"${c.name}"`));
-    } catch (e) {
-      console.warn("Failed to get cached profiles:", e);
-    }
-    return profilesList;
-  };
-
-  // Filter profiles based on search term (name or address) - SIMPLE: CACHE FIRST, THEN BLOCKCHAIN
+  // Filter profiles based on search term (name or address) - DIRECTLY FROM BLOCKCHAIN
   useEffect(() => {
     const filterProfiles = async () => {
       setSearchError(null);
       const trimmedSearch = searchTerm.trim();
       
-      // If search is empty, show all profiles
+      // If search is empty, reload all profiles from blockchain
       if (!trimmedSearch) {
         setIsSearchMode(false);
         setSelectedCreatorForDonation(null);
-        setLoading(true);
-        try {
-          const profiles = getAllProfilesFromCache();
-          setCreators(profiles);
-        } catch (e) {
-          console.error("Failed to load profiles:", e);
-        } finally {
-          setLoading(false);
-        }
+        loadAllProfiles();
         return;
       }
 
@@ -342,86 +194,82 @@ const Explore: React.FC = () => {
       setLoading(true);
 
       try {
-        // STEP 1: Search in cache (instant, works offline)
-        const allCachedProfiles = getAllProfilesFromCache();
+        // Search DIRECTLY in blockchain - get all profiles and filter
+        console.log(`[Search] Searching blockchain for: "${trimmedSearch}"`);
+        
+        // Get all profiles from blockchain
+        const allProfiles = await getAllRegisteredProfiles();
+        console.log(`[Search] Found ${allProfiles.length} profiles on blockchain`);
+        
+        // Fetch profile data for all addresses and filter
         const queryLower = trimmedSearch.toLowerCase();
+        const matchingProfiles: Creator[] = [];
         
-        console.log(`[Search] Searching for: "${trimmedSearch}" (lowercase: "${queryLower}")`);
-        console.log(`[Search] Total cached profiles to search: ${allCachedProfiles.length}`);
-        console.log(`[Search] Cached profile names:`, allCachedProfiles.map(c => c.name));
-        
-        let matchingProfiles: Creator[] = [];
-        
+        // Search by address first (if it's an address)
         if (trimmedSearch.startsWith("aleo1")) {
-          // Search by address
-          console.log(`[Search] Searching by address...`);
-          matchingProfiles = allCachedProfiles.filter(creator => {
-            const matches = creator.id.toLowerCase().includes(queryLower);
-            if (matches) {
-              console.log(`[Search] ✅ Found by address: ${creator.name} (${creator.id.slice(0, 10)}...)`);
-            }
-            return matches;
-          });
-        } else {
-          // Search by name or bio
-          console.log(`[Search] Searching by name/bio...`);
-          matchingProfiles = allCachedProfiles.filter(creator => {
-            const nameLower = creator.name.toLowerCase();
-            const bioLower = (creator.bio || "").toLowerCase();
-            const nameMatch = nameLower.includes(queryLower);
-            const bioMatch = bioLower.includes(queryLower);
-            const matches = nameMatch || bioMatch;
-            
-            if (matches) {
-              console.log(`[Search] ✅ Found by name/bio: ${creator.name} (name: "${nameLower}", bio: "${bioLower}")`);
-            } else {
-              console.log(`[Search] ❌ No match: ${creator.name} (name: "${nameLower}", bio: "${bioLower}")`);
-            }
-            return matches;
-          });
-        }
-        
-        console.log(`[Search] Found ${matchingProfiles.length} matching profiles`);
-        
-        // If found in cache, show immediately
-        if (matchingProfiles.length > 0) {
-          console.log(`[Search] ✅ Showing ${matchingProfiles.length} profiles from cache`);
-          setCreators(matchingProfiles);
-          setSelectedCreatorForDonation(matchingProfiles[0]);
-          setSearchError(null);
-          setLoading(false);
-          return;
-        }
-        
-        console.log(`[Search] ❌ No profiles found in cache for "${trimmedSearch}"`);
-        
-        // STEP 2: Not in cache, try blockchain (only for full addresses or if registry exists)
-        if (trimmedSearch.startsWith("aleo1") && trimmedSearch.length >= 63) {
-          // Full address - try blockchain
+          // Direct address search - fetch profile directly
           const profile = await getProfileFromChain(trimmedSearch);
           if (profile) {
-            cacheProfile(trimmedSearch, profile);
-            const newCreator: Creator = {
+            const creator: Creator = {
               id: trimmedSearch,
               name: profile.name && profile.name.trim() ? profile.name : "Anonymous",
               handle: trimmedSearch.slice(0, 10) + "...",
-              category: 'User',
+              category: 'User' as const,
               avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${trimmedSearch}`,
               bio: profile.bio || "",
               verified: false,
-              color: 'white'
+              color: 'white' as const
             };
-            setCreators([newCreator]);
-            setSelectedCreatorForDonation(newCreator);
-            setSearchError(null);
-          } else {
-            setCreators([]);
-            setSearchError("Profile not found.");
+            matchingProfiles.push(creator);
+            console.log(`[Search] ✅ Found by address: ${creator.name}`);
           }
         } else {
-          // Not found
+          // Search by name/bio - fetch all profiles and filter
+          const fetchPromises = allProfiles.slice(0, 100).map(async (address) => {
+            try {
+              const profile = await getProfileFromChain(address);
+              if (profile) {
+                const nameLower = (profile.name || "").toLowerCase();
+                const bioLower = (profile.bio || "").toLowerCase();
+                const nameMatch = nameLower.includes(queryLower);
+                const bioMatch = bioLower.includes(queryLower);
+                
+                if (nameMatch || bioMatch) {
+                  return {
+                    id: address,
+                    name: profile.name && profile.name.trim() ? profile.name : "Anonymous",
+                    handle: address.slice(0, 10) + "...",
+                    category: 'User' as const,
+                    avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${address}`,
+                    bio: profile.bio || "",
+                    verified: false,
+                    color: 'white' as const
+                  } as Creator;
+                }
+              }
+            } catch (e) {
+              console.warn(`[Search] Failed to fetch profile for ${address}:`, e);
+            }
+            return null;
+          });
+          
+          const results = await Promise.all(fetchPromises);
+          matchingProfiles.push(...results.filter((p): p is Creator => p !== null));
+        }
+        
+        console.log(`[Search] Found ${matchingProfiles.length} matching profiles from blockchain`);
+        
+        if (matchingProfiles.length > 0) {
+          console.log(`[Search] ✅ Showing ${matchingProfiles.length} profiles from blockchain`);
+          setCreators(matchingProfiles);
+          setSelectedCreatorForDonation(matchingProfiles[0]);
+          setSearchError(null);
+        } else {
+          console.log(`[Search] ❌ No profiles found in blockchain for "${trimmedSearch}"`);
+        
+          // Not found in blockchain
           setCreators([]);
-          setSearchError("No profiles found. Try searching by full Aleo address.");
+          setSearchError("No profiles found matching your search.");
         }
       } catch (e) {
         console.error("Error searching profiles", e);

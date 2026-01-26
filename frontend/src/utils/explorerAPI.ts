@@ -30,6 +30,7 @@ export interface UserProfile {
 }
 
 const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
+const PROVABLE_API_V2_BASE = "https://api.provable.com/v2/testnet";
 
 // Public profiles registry URL (can be hosted on GitHub, Netlify, or any static hosting)
 // Format: JSON array of profile addresses: ["aleo1...", "aleo1...", ...]
@@ -164,124 +165,130 @@ export const getProfileAddressAtIndex = async (index: number): Promise<string | 
     }
 };
 
-// Scan blockchain for all profiles by finding create_profile and update_profile transactions
+// Scan blockchain for all profiles using Provable API v2
+// Finds all addresses that called create_profile or update_profile
 export const scanBlockchainForProfiles = async (): Promise<string[]> => {
     const discoveredAddresses = new Set<string>();
     
     try {
-        console.log("[Blockchain Scan] Scanning for profile transactions...");
+        console.log("[Blockchain Scan] Scanning for profile transactions using Provable API v2...");
         
-        // Try to get profiles from Aleo RPC API
-        const rpcUrl = "https://testnet3.aleorpc.com";
-        
-        // Scan create_profile transactions
+        // Use Provable API v2 to get latest calls by program ID
+        // This will give us all transactions for our program
         try {
-            const createProfileResponse = await fetch(rpcUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: "2.0",
-                    id: 1,
-                    method: "aleoTransactionsForProgram",
-                    params: {
-                        programId: PROGRAM_ID,
-                        functionName: "create_profile",
-                        page: 0,
-                        maxTransactions: 1000
-                    }
-                })
-            });
+            const programCallsUrl = `${PROVABLE_API_V2_BASE}/public/programs/${PROGRAM_ID}/calls?limit=1000`;
+            console.log(`[Blockchain Scan] Fetching program calls from: ${programCallsUrl}`);
             
-            if (createProfileResponse.ok) {
-                const data = await createProfileResponse.json();
-                if (data.result && Array.isArray(data.result)) {
-                    console.log(`[Blockchain Scan] Found ${data.result.length} create_profile transactions`);
-                    data.result.forEach((tx: any) => {
-                        // Extract caller address from transaction
-                        // The address can be in different places depending on transaction structure
-                        if (tx.transaction?.owner) {
-                            discoveredAddresses.add(tx.transaction.owner);
-                        }
-                        if (tx.owner) {
-                            discoveredAddresses.add(tx.owner);
-                        }
-                        // Also check execution transitions
-                        if (tx.transaction?.execution?.transitions) {
-                            tx.transaction.execution.transitions.forEach((transition: any) => {
-                                if (transition.function === "create_profile") {
-                                    // Caller might be in transition metadata
-                                    if (transition.caller) {
-                                        discoveredAddresses.add(transition.caller);
-                                    }
-                                }
-                            });
-                        }
-                    });
-                }
+            const response = await fetch(programCallsUrl);
+            if (response.ok) {
+                const data = await response.json();
+                console.log(`[Blockchain Scan] API response:`, data);
+                
+                // Handle different response formats
+                const transactions = Array.isArray(data) ? data : (data.transactions || data.calls || data.data || []);
+                
+                console.log(`[Blockchain Scan] Found ${transactions.length} transactions for program ${PROGRAM_ID}`);
+                
+                transactions.forEach((tx: any) => {
+                    // Extract address from transaction
+                    // Try different possible fields where the caller address might be
+                    let address: string | null = null;
+                    
+                    // Check various possible locations for the caller address
+                    if (tx.caller) address = tx.caller;
+                    else if (tx.owner) address = tx.owner;
+                    else if (tx.address) address = tx.address;
+                    else if (tx.transaction?.owner) address = tx.transaction.owner;
+                    else if (tx.transaction?.caller) address = tx.transaction.caller;
+                    else if (tx.execution?.transitions?.[0]?.caller) address = tx.execution.transitions[0].caller;
+                    else if (tx.transitions?.[0]?.caller) address = tx.transitions[0].caller;
+                    
+                    // Also check if function is create_profile or update_profile
+                    const functionName = tx.function || tx.functionName || tx.transitions?.[0]?.function || tx.execution?.transitions?.[0]?.function;
+                    const isProfileFunction = functionName === "create_profile" || functionName === "update_profile";
+                    
+                    if (address && address.startsWith('aleo1') && isProfileFunction) {
+                        discoveredAddresses.add(address);
+                        console.log(`[Blockchain Scan] Found profile transaction: ${functionName} by ${address.slice(0, 10)}...`);
+                    }
+                });
+            } else {
+                console.warn(`[Blockchain Scan] Failed to fetch program calls: ${response.status} ${response.statusText}`);
             }
         } catch (e) {
-            console.warn("[Blockchain Scan] Failed to scan create_profile via RPC:", e);
+            console.warn("[Blockchain Scan] Failed to scan via Provable API v2 program calls:", e);
         }
         
-        // Scan update_profile transactions
+        // Alternative: Try to get transactions by program using SnarkOS endpoint
         try {
-            const updateProfileResponse = await fetch(rpcUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    jsonrpc: "2.0",
-                    id: 2,
-                    method: "aleoTransactionsForProgram",
-                    params: {
-                        programId: PROGRAM_ID,
-                        functionName: "update_profile",
-                        page: 0,
-                        maxTransactions: 1000
-                    }
-                })
-            });
+            const programTxUrl = `${PROVABLE_API_V2_BASE}/snarkos/programs/${PROGRAM_ID}/transitions?limit=1000`;
+            console.log(`[Blockchain Scan] Trying SnarkOS endpoint: ${programTxUrl}`);
             
-            if (updateProfileResponse.ok) {
-                const data = await updateProfileResponse.json();
-                if (data.result && Array.isArray(data.result)) {
-                    console.log(`[Blockchain Scan] Found ${data.result.length} update_profile transactions`);
-                    data.result.forEach((tx: any) => {
-                        if (tx.transaction?.owner) {
-                            discoveredAddresses.add(tx.transaction.owner);
+            const response = await fetch(programTxUrl);
+            if (response.ok) {
+                const data = await response.json();
+                const transitions = Array.isArray(data) ? data : (data.transitions || data.data || []);
+                
+                console.log(`[Blockchain Scan] Found ${transitions.length} transitions for program ${PROGRAM_ID}`);
+                
+                transitions.forEach((transition: any) => {
+                    const functionName = transition.function || transition.functionName;
+                    const isProfileFunction = functionName === "create_profile" || functionName === "update_profile";
+                    
+                    if (isProfileFunction) {
+                        let address: string | null = null;
+                        if (transition.caller) address = transition.caller;
+                        else if (transition.owner) address = transition.owner;
+                        else if (transition.address) address = transition.address;
+                        
+                        if (address && address.startsWith('aleo1')) {
+                            discoveredAddresses.add(address);
+                            console.log(`[Blockchain Scan] Found profile transition: ${functionName} by ${address.slice(0, 10)}...`);
                         }
-                        if (tx.owner) {
-                            discoveredAddresses.add(tx.owner);
-                        }
-                        if (tx.transaction?.execution?.transitions) {
-                            tx.transaction.execution.transitions.forEach((transition: any) => {
-                                if (transition.function === "update_profile") {
-                                    if (transition.caller) {
-                                        discoveredAddresses.add(transition.caller);
-                                    }
-                                }
-                            });
-                        }
-                    });
-                }
+                    }
+                });
             }
         } catch (e) {
-            console.warn("[Blockchain Scan] Failed to scan update_profile via RPC:", e);
+            console.warn("[Blockchain Scan] Failed to scan via SnarkOS transitions:", e);
         }
         
-        // Also try Provable Explorer API as fallback - scan all profiles mapping entries
-        // Since we can't directly query transactions, we'll try to scan the profiles mapping
-        // by checking known addresses or using a different approach
+        // Also try to get all addresses from transactions endpoint
         try {
-            // Alternative: Try to get all addresses that have profiles in the mapping
-            // This is less efficient but works if RPC doesn't work
-            console.log("[Blockchain Scan] Trying alternative method via profile mappings...");
-            // Note: We can't iterate mappings directly, so this is a fallback
+            // Get latest transactions and filter for our program
+            const latestTxUrl = `${PROVABLE_API_V2_BASE}/public/transactions/latest?limit=1000`;
+            const response = await fetch(latestTxUrl);
+            
+            if (response.ok) {
+                const data = await response.json();
+                const transactions = Array.isArray(data) ? data : (data.transactions || data.data || []);
+                
+                transactions.forEach((tx: any) => {
+                    // Check if transaction is for our program
+                    const programId = tx.program || tx.programId || tx.transitions?.[0]?.program;
+                    if (programId === PROGRAM_ID) {
+                        const functionName = tx.function || tx.functionName || tx.transitions?.[0]?.function;
+                        const isProfileFunction = functionName === "create_profile" || functionName === "update_profile";
+                        
+                        if (isProfileFunction) {
+                            let address: string | null = null;
+                            if (tx.caller) address = tx.caller;
+                            else if (tx.owner) address = tx.owner;
+                            else if (tx.address) address = tx.address;
+                            else if (tx.transaction?.owner) address = tx.transaction.owner;
+                            
+                            if (address && address.startsWith('aleo1')) {
+                                discoveredAddresses.add(address);
+                            }
+                        }
+                    }
+                });
+            }
         } catch (e) {
-            console.warn("[Blockchain Scan] Failed alternative scan:", e);
+            console.warn("[Blockchain Scan] Failed to scan via latest transactions:", e);
         }
         
         const addresses = Array.from(discoveredAddresses).filter(addr => addr && typeof addr === 'string' && addr.startsWith('aleo1'));
-        console.log(`[Blockchain Scan] Discovered ${addresses.length} unique profile addresses from blockchain`);
+        console.log(`[Blockchain Scan] Discovered ${addresses.length} unique profile addresses from blockchain via Provable API v2`);
         return addresses;
     } catch (error) {
         console.error("[Blockchain Scan] Error scanning blockchain for profiles:", error);
