@@ -14,7 +14,6 @@
     "@demox-labs/aleo-wallet-adapter-leo": "^0.0.25",
     "@demox-labs/aleo-wallet-adapter-react": "^0.0.22",
     "@provablehq/sdk": "^0.9.14",
-    "aleo-adapters": "^1.2.1",
     "lucide-react": "^0.562.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
