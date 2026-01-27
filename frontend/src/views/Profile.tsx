@@ -9,6 +9,7 @@ import { requestTransactionWithRetry } from '../utils/walletUtils';
 import { WalletAdapterNetwork } from '@demox-labs/aleo-wallet-adapter-base';
 import { PROGRAM_ID } from '../deployed_program';
 import { useParams } from 'react-router-dom';
+import { logger } from '../utils/logger';
 
 const Profile: React.FC = () => {
   const { address: urlAddress } = useParams<{ address?: string }>();
@@ -47,7 +48,7 @@ const Profile: React.FC = () => {
             // Fetch directly from blockchain (no cache)
             const data = await getProfileFromChain(addressToFetch);
             if (data) {
-                console.log("[Profile] Loaded from chain:", data);
+                logger.debug("[Profile] Loaded from chain:", addressToFetch);
                 setProfile({
                     name: data.name,
                     bio: data.bio,
@@ -83,7 +84,7 @@ const Profile: React.FC = () => {
         const name = (profile.name || "").toString().slice(0, 30);
         const bio = (profile.bio || "").toString().slice(0, 30);
         
-        console.log("Profile data before conversion:", { name, bio, nameType: typeof name, bioType: typeof bio });
+        logger.debug("Profile data before conversion:", { name, bio });
         
         const nameField = stringToField(name);
         const bioField = stringToField(bio); // Constraint: Field size
@@ -96,7 +97,7 @@ const Profile: React.FC = () => {
             throw new Error(`Invalid bioField: ${bioField}`);
         }
         
-        console.log("Converted fields:", { nameField, bioField });
+        logger.debug("Converted fields:", { nameField, bioField });
         
         const functionName = existsOnChain ? "update_profile" : "create_profile";
 
@@ -125,24 +126,7 @@ const Profile: React.FC = () => {
         };
 
         // Validate transaction before sending
-        console.log("Profile transaction (full):", JSON.stringify(transaction, null, 2));
-        console.log("Profile transaction (summary):", {
-            address: transaction.address,
-            addressType: typeof transaction.address,
-            chainId: transaction.chainId,
-            chainIdType: typeof transaction.chainId,
-            chainIdValue: String(transaction.chainId),
-            transitionsCount: transaction.transitions.length,
-            program: transaction.transitions[0].program,
-            programType: typeof transaction.transitions[0].program,
-            functionName: transaction.transitions[0].functionName,
-            functionNameType: typeof transaction.transitions[0].functionName,
-            inputs: transaction.transitions[0].inputs,
-            inputsCount: transaction.transitions[0].inputs.length,
-            inputsTypes: transaction.transitions[0].inputs.map(i => typeof i),
-            inputsValues: transaction.transitions[0].inputs,
-            inputsStringified: transaction.transitions[0].inputs.map(i => String(i))
-        });
+        logger.debug("Profile transaction:", functionName);
 
         if (wallet.adapter && 'requestTransaction' in wallet.adapter) {
             // @ts-ignore
@@ -163,16 +147,17 @@ const Profile: React.FC = () => {
                 // Add to known profiles list (for blockchain scanning)
                 if (publicKey) {
                     addKnownProfileAddress(publicKey);
-                    console.log("[Profile] Profile saved:", { 
-                        name, 
-                        bio, 
-                        address: publicKey
-                    });
+                    logger.debug("[Profile] Profile saved:", publicKey);
+                    
+                    if (existsOnChain) {
+                        logger.profile.updated(name);
+                    } else {
+                        logger.profile.created(publicKey);
+                    }
                     
                     // CRITICAL: Dispatch profileUpdated event to refresh Explore
                     // This ensures the updated profile appears in Explore immediately
                     window.dispatchEvent(new CustomEvent('profileUpdated'));
-                    console.log("[Profile] Dispatched profileUpdated event to refresh Explore");
                 }
                 
                 alert(`Profile ${existsOnChain ? 'updated' : 'created'} successfully!`);
@@ -287,6 +272,7 @@ const Profile: React.FC = () => {
             return;
         }
         
+        logger.donation.sent(donationTxId);
         alert(`Donation sent successfully!\n\nFunction: send_donation\nTransfer: ${transferTxId.slice(0, 8)}...\nRecord: ${donationTxId.slice(0, 8)}...`);
         
         // Clear donation form

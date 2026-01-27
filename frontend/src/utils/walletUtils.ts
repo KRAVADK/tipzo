@@ -1,5 +1,7 @@
 // Wallet utilities with timeout and retry logic
 
+import { logger } from './logger';
+
 const WALLET_TIMEOUT = 30000; // 30 seconds (increased for Netlify/production)
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 2000; // 2 seconds
@@ -26,7 +28,7 @@ export async function withWalletTimeout<T>(
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-            console.log(`[Wallet] ⏳ Attempt ${attempt}/${maxRetries}...`);
+            logger.debug(`[Wallet] Attempt ${attempt}/${maxRetries}...`);
             
             if (options.onRetry && attempt > 1) {
                 options.onRetry(attempt);
@@ -45,7 +47,7 @@ export async function withWalletTimeout<T>(
             const result = await Promise.race([operation(), timeoutPromise]);
             
             const duration = Date.now() - startTime;
-            console.log(`[Wallet] ✅ Completed in ${(duration / 1000).toFixed(2)}s`);
+            logger.debug(`[Wallet] Completed in ${(duration / 1000).toFixed(2)}s`);
             
             return result;
         } catch (error: any) {
@@ -54,17 +56,17 @@ export async function withWalletTimeout<T>(
             
             // Don't retry on user cancellation
             if (errorMsg.includes("User rejected") || errorMsg.includes("User cancelled")) {
-                console.log("[Wallet] ❌ User cancelled operation");
+                console.error("[Wallet] ❌ User cancelled operation");
                 throw error;
             }
 
             // Don't retry on invalid parameters
             if (errorMsg.includes("INVALID_PARAMS") || errorMsg.includes("Some of the parameters you provided are invalid")) {
-                console.log("[Wallet] ❌ Invalid parameters, not retrying");
+                console.error("[Wallet] ❌ Invalid parameters, not retrying");
                 throw error;
             }
 
-            console.warn(`[Wallet] ⚠️ Attempt ${attempt}/${maxRetries} failed:`, errorMsg);
+            logger.debug(`[Wallet] Attempt ${attempt}/${maxRetries} failed:`, errorMsg);
 
             // If this was the last attempt, throw the error
             if (attempt === maxRetries) {
@@ -73,7 +75,7 @@ export async function withWalletTimeout<T>(
             }
 
             // Wait before retrying
-            console.log(`[Wallet] 🔄 Retrying in ${retryDelay / 1000}s...`);
+            logger.debug(`[Wallet] Retrying in ${retryDelay / 1000}s...`);
             await new Promise(resolve => setTimeout(resolve, retryDelay));
         }
     }
@@ -104,7 +106,7 @@ export async function requestTransactionWithRetry(
         {
             ...options,
             onRetry: (attempt) => {
-                console.log(`[Wallet] 🔄 Retrying transaction request (${attempt}/${options.maxRetries || MAX_RETRIES})...`);
+                logger.debug(`[Wallet] Retrying transaction request (${attempt}/${options.maxRetries || MAX_RETRIES})...`);
                 if (options.onRetry) {
                     options.onRetry(attempt);
                 }

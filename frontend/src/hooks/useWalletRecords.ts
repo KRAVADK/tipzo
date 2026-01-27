@@ -1,6 +1,7 @@
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { useState, useCallback } from "react";
 import { requestRecordsWithRetry, decryptWithRetry } from "../utils/walletUtils";
+import { logger } from "../utils/logger";
 
 export interface RecordDonation {
     owner: string;
@@ -49,7 +50,7 @@ export const useWalletRecords = () => {
                     records = Array.isArray(result) ? result : [];
                     if (records && records.length > 0) {
                         setHasPermission(true);
-                        console.log(`✅ [DonationRecords] Fetched ${records.length} records via requestRecordPlaintexts`);
+                        logger.debug(`[DonationRecords] Fetched ${records.length} records via requestRecordPlaintexts`);
                     }
                 } catch (error: any) {
                     const errorMsg = error?.message || String(error);
@@ -66,21 +67,19 @@ export const useWalletRecords = () => {
             // Fallback: attempt via requestRecords (encrypted) with retry
             if (records.length === 0 && adapter.requestRecords) {
                 try {
-                    console.log("[DonationRecords] 🔓 Fetching encrypted records...");
+                    logger.debug("[DonationRecords] Fetching encrypted records...");
                     const encryptedRecords = await requestRecordsWithRetry(adapter, programId);
                     
                     if (encryptedRecords && encryptedRecords.length > 0) {
-                        console.log(`✅ [DonationRecords] Fetched ${encryptedRecords.length} encrypted records via requestRecords`);
+                        logger.debug(`[DonationRecords] Fetched ${encryptedRecords.length} encrypted records`);
                         // If decrypt method exists, attempt to decrypt
                         if (adapter.decrypt) {
                             const decryptedRecords: Array<{ id?: string; plaintext: string }> = [];
-                            console.log(`[DonationRecords] 🔓 Attempting to decrypt ${encryptedRecords.length} records...`);
+                            logger.debug(`[DonationRecords] Attempting to decrypt ${encryptedRecords.length} records...`);
                             
                             for (let i = 0; i < encryptedRecords.length; i++) {
                                 const record = encryptedRecords[i];
                                 try {
-                                    console.log(`[DonationRecords] Processing record ${i + 1}/${encryptedRecords.length}:`, typeof record === "string" ? record.substring(0, 100) + "..." : record);
-                                    
                                     let ciphertext: string | null = null;
                                     
                                     if (typeof record === "string" && record.startsWith("record1")) {
@@ -95,10 +94,8 @@ export const useWalletRecords = () => {
                                     }
                                     
                                     if (ciphertext && ciphertext.startsWith("record1")) {
-                                        console.log(`[DonationRecords] 🔐 Decrypting record ${i + 1}...`);
                                         const decrypted = await decryptWithRetry(adapter, ciphertext);
                                         const plaintext = typeof decrypted === "string" ? decrypted : JSON.stringify(decrypted);
-                                        console.log(`[DonationRecords] ✅ Decrypted record ${i + 1}:`, plaintext.substring(0, 300) + "...");
                                         
                                         decryptedRecords.push({
                                             id: typeof record === "object" && record !== null && "id" in record && typeof (record as any).id === "string" ? (record as any).id : undefined,
@@ -112,7 +109,7 @@ export const useWalletRecords = () => {
                                 }
                             }
                             
-                            console.log(`[DonationRecords] ✅ Successfully decrypted ${decryptedRecords.length} out of ${encryptedRecords.length} records`);
+                            logger.debug(`[DonationRecords] Successfully decrypted ${decryptedRecords.length} out of ${encryptedRecords.length} records`);
                             records = decryptedRecords;
                             if (records.length > 0) {
                                 setHasPermission(true);
@@ -134,24 +131,22 @@ export const useWalletRecords = () => {
             }
             
             // Parse records
-            console.log(`[DonationRecords] 📝 Parsing ${records.length} records...`);
+            logger.debug(`[DonationRecords] Parsing ${records.length} records...`);
             const parsedRecords: RecordDonation[] = [];
             
             for (let i = 0; i < records.length; i++) {
                 const record = records[i];
                 const recordString = record.plaintext || String(record);
-                console.log(`[DonationRecords] Parsing record ${i + 1}/${records.length}:`, recordString.substring(0, 200) + "...");
                 
                 const parsed = parseDonationRecord(recordString);
                 if (parsed) {
-                    console.log(`[DonationRecords] ✅ Successfully parsed record ${i + 1}:`, parsed);
                     parsedRecords.push(parsed);
                 } else {
                     console.warn(`[DonationRecords] ⚠️ Failed to parse record ${i + 1}`);
                 }
             }
             
-            console.log(`✅ [DonationRecords] Parsed ${parsedRecords.length} donation records from wallet (out of ${records.length} total)`);
+            logger.debug(`[DonationRecords] Parsed ${parsedRecords.length} donation records from wallet (out of ${records.length} total)`);
             return parsedRecords;
             
         } catch (error) {
@@ -178,7 +173,6 @@ function parseDonationRecord(recordString: string): RecordDonation | null {
         }
         
         const fullRecord = recordString;
-        console.log("[DonationRecords] 🔍 Parsing record (full):", fullRecord);
         
         // More flexible regex patterns - handle whitespace variations
         const ownerMatch = fullRecord.match(/owner[:\s]+(aleo1[a-z0-9]+)/i);
@@ -189,23 +183,12 @@ function parseDonationRecord(recordString: string): RecordDonation | null {
         const timestampMatch = fullRecord.match(/timestamp[:\s]+(\d+)u64/i);
         const nonceMatch = fullRecord.match(/[_\s]nonce[:\s]+([a-zA-Z0-9]+)/i);
         
-        console.log("[DonationRecords] Matches:", {
-            owner: ownerMatch?.[1],
-            sender: senderMatch?.[1],
-            recipient: recipientMatch?.[1],
-            amount: amountMatch?.[1],
-            message: messageMatch?.[1],
-            timestamp: timestampMatch?.[1],
-            nonce: nonceMatch?.[1]
-        });
-        
         if (!ownerMatch || !amountMatch || !timestampMatch) {
             console.warn("[DonationRecords] Missing required fields:", {
                 hasOwner: !!ownerMatch,
                 hasAmount: !!amountMatch,
                 hasTimestamp: !!timestampMatch
             });
-            console.warn("[DonationRecords] Full record for debugging:", fullRecord);
             return null;
         }
         
@@ -215,7 +198,6 @@ function parseDonationRecord(recordString: string): RecordDonation | null {
         
         if (!isRecipientDonation && !isSentDonation) {
             console.warn("[DonationRecords] Record doesn't match RecipientDonation or SentDonation structure");
-            console.warn("[DonationRecords] Has sender:", !!senderMatch, "Has recipient:", !!recipientMatch);
             return null;
         }
         
@@ -229,13 +211,13 @@ function parseDonationRecord(recordString: string): RecordDonation | null {
         // If timestamp is too large, it might be in milliseconds - convert to seconds
         let timestamp = rawTimestamp;
         if (rawTimestamp > MAX_TIMESTAMP) {
-            console.warn(`[DonationRecords] Timestamp ${rawTimestamp} seems too large, converting from milliseconds to seconds`);
+            logger.debug(`[DonationRecords] Timestamp ${rawTimestamp} seems too large, converting from milliseconds to seconds`);
             timestamp = Math.floor(rawTimestamp / 1000);
         }
         
         // Validate final timestamp
         if (timestamp < MIN_TIMESTAMP || timestamp > MAX_TIMESTAMP) {
-            console.warn(`[DonationRecords] Invalid timestamp: ${timestamp} (raw: ${rawTimestamp}), using current time as fallback`);
+            logger.debug(`[DonationRecords] Invalid timestamp: ${timestamp} (raw: ${rawTimestamp}), using current time as fallback`);
             timestamp = Math.floor(Date.now() / 1000); // Use current time as fallback
         }
         
@@ -249,10 +231,8 @@ function parseDonationRecord(recordString: string): RecordDonation | null {
         
         if (isRecipientDonation && senderMatch) {
             parsed.sender = senderMatch[1];
-            console.log(`[DonationRecords] ✅ Parsed RecipientDonation: owner=${parsed.owner}, sender=${parsed.sender}, amount=${parsed.amount}, timestamp=${parsed.timestamp}`);
         } else if (isSentDonation && recipientMatch) {
             parsed.recipient = recipientMatch[1];
-            console.log(`[DonationRecords] ✅ Parsed SentDonation: owner=${parsed.owner}, recipient=${parsed.recipient}, amount=${parsed.amount}, timestamp=${parsed.timestamp}`);
         }
         
         return parsed;

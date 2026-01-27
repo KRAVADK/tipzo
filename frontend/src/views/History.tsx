@@ -7,6 +7,7 @@ import { PROGRAM_ID } from '../deployed_program';
 import { formatAddress, fieldToString } from '../utils/aleo';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
 import { addKnownProfileAddress } from '../utils/explorerAPI';
+import { logger } from '../utils/logger';
 
 const History: React.FC = () => {
   const { publicKey } = useWallet();
@@ -18,9 +19,9 @@ const History: React.FC = () => {
 
   const loadRecords = async () => {
     setRefreshing(true);
-    console.log("[History] Loading records for:", publicKey);
+    logger.debug("[History] Loading records for:", publicKey);
     const data = await fetchRecords(PROGRAM_ID);
-    console.log("[History] Loaded records:", data.length, data);
+    logger.debug("[History] Loaded records:", data.length);
     setRecords(data);
     
     // Add addresses from donation records to known profiles list
@@ -37,7 +38,6 @@ const History: React.FC = () => {
     
     // Add to known profiles list (for blockchain scanning)
     if (addressesToCheck.size > 0) {
-      console.log(`[History] Adding ${addressesToCheck.size} addresses to known profiles list...`);
       addressesToCheck.forEach(address => {
         addKnownProfileAddress(address);
       });
@@ -94,7 +94,6 @@ const History: React.FC = () => {
       const isOwner = publicKey && record.owner?.toLowerCase() === publicKey.toLowerCase();
       return isSent && isOwner;
     });
-    console.log("[History] Sent transactions:", sent.length, "out of", records.length, "total records");
     return sent.sort((a, b) => b.timestamp - a.timestamp);
   }, [records, publicKey]);
 
@@ -105,7 +104,6 @@ const History: React.FC = () => {
       const isOwner = publicKey && record.owner?.toLowerCase() === publicKey.toLowerCase();
       return isReceived && isOwner;
     });
-    console.log("[History] Received transactions:", received.length, "out of", records.length, "total records");
     return received.sort((a, b) => b.timestamp - a.timestamp);
   }, [records, publicKey]);
 
