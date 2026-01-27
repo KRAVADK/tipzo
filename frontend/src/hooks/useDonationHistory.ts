@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { DonationTransaction } from '../utils/explorerAPI';
 import { PROGRAM_ID } from '../deployed_program';
 import { useWalletRecords } from './useWalletRecords';
+import { logger } from '../utils/logger';
 
 export function useDonationHistory(userAddress: string | null) {
     const [sent, setSent] = useState<DonationTransaction[]>([]);
@@ -22,11 +23,11 @@ export function useDonationHistory(userAddress: string | null) {
         setError(null);
 
         try {
-            console.log('[History] 🔄 Fetching donations from wallet (blockchain only)...');
+            logger.debug('[History] Fetching donations from wallet...');
 
             // Fetch all records from wallet
             const walletRecords = await fetchRecords(PROGRAM_ID);
-            console.log(`[History] 📊 Found ${walletRecords.length} total records from wallet`);
+            logger.debug(`[History] Found ${walletRecords.length} total records`);
 
             // Filter received donations (RecipientDonation: owner = recipient, has sender, NO recipient field)
             const receivedFromWallet = walletRecords
@@ -68,7 +69,7 @@ export function useDonationHistory(userAddress: string | null) {
                     function: 'send_donation',
                 }));
 
-            console.log(`[History] ✅ Found ${sentFromWallet.length} sent, ${receivedFromWallet.length} received donations from wallet`);
+            logger.debug(`[History] Found ${sentFromWallet.length} sent, ${receivedFromWallet.length} received donations`);
             
             setSent(sentFromWallet);
             setReceived(receivedFromWallet);
@@ -92,7 +93,7 @@ export function useDonationHistory(userAddress: string | null) {
 
         // Set up interval to sync with wallet records periodically
         const interval = setInterval(async () => {
-            console.log('[History] 🔄 Auto-syncing with wallet...');
+            logger.debug('[History] Auto-syncing with wallet...');
             
             try {
                 const walletRecords = await fetchRecords(PROGRAM_ID);
@@ -140,11 +141,7 @@ export function useDonationHistory(userAddress: string | null) {
                 setSent(sentFromWallet);
                 setReceived(receivedFromWallet);
                 
-                if (sentFromWallet.length > 0 || receivedFromWallet.length > 0) {
-                    console.log(`[History] ✅ Synced: ${sentFromWallet.length} sent, ${receivedFromWallet.length} received`);
-                } else {
-                    console.log('[History] ℹ️ No donations found in wallet');
-                }
+                logger.debug(`[History] Synced: ${sentFromWallet.length} sent, ${receivedFromWallet.length} received`);
             } catch (err) {
                 console.warn('[History] ⚠️ Auto-sync failed:', err);
                 // Don't clear state on error, just log it

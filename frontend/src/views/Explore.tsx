@@ -9,6 +9,7 @@ import { PROGRAM_ID } from '../deployed_program';
 import { stringToField } from '../utils/aleo';
 import { getProfileFromChain, getAllRegisteredProfiles, addKnownProfileAddress, getKnownProfileAddresses } from '../utils/explorerAPI';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
+import { logger } from '../utils/logger';
 
 const Explore: React.FC = () => {
   const { wallet, publicKey } = useWallet();
@@ -39,22 +40,20 @@ const Explore: React.FC = () => {
         
         // STEP 1: Get all registered profiles DIRECTLY from blockchain using Provable API v2
         // NO CACHE - all profiles come from blockchain
-        console.log("[Explore] Fetching registered profiles directly from blockchain (Provable API v2)...");
+        logger.debug("[Explore] Fetching registered profiles...");
         
         // Primary source: Scan blockchain for all profile transactions (create_profile/update_profile)
         const blockchainAddresses = await getAllRegisteredProfiles();
-        console.log(`[Explore] Found ${blockchainAddresses.length} registered profiles from blockchain scan`);
+        logger.debug(`[Explore] Found ${blockchainAddresses.length} profiles`);
         
         // Combine all addresses (no public registry fallback - pure blockchain)
         const registeredAddresses = Array.from(new Set(blockchainAddresses));
-        console.log(`[Explore] Total unique profiles from blockchain: ${registeredAddresses.length}`);
         
         // Automatically add all discovered addresses to known profiles list
         if (blockchainAddresses.length > 0) {
             blockchainAddresses.forEach(addr => {
                 addKnownProfileAddress(addr);
             });
-            console.log(`[Explore] Added ${blockchainAddresses.length} addresses to known profiles list`);
         }
         
         // STEP 2: Use ONLY blockchain addresses (NO CACHE)
@@ -68,8 +67,6 @@ const Explore: React.FC = () => {
         });
         
         const addressArray = Array.from(allAddresses);
-        console.log(`[Explore] Total profiles to load from blockchain: ${addressArray.length}`);
-        console.log(`[Explore] All addresses to load:`, addressArray.map(addr => addr.slice(0, 10) + '...'));
         
         // STEP 3: Load all profiles DIRECTLY from blockchain (NO CACHE)
         // All profiles come from Provable API v2 - fresh data every time
@@ -80,7 +77,6 @@ const Explore: React.FC = () => {
             if (chainProfile) {
               const profileName = chainProfile.name && chainProfile.name.trim() ? chainProfile.name : "Anonymous";
               const profileBio = chainProfile.bio || "";
-              console.log(`[Explore] Loaded from blockchain: ${profileName} (${address.slice(0, 10)}...)`);
               
               // No caching - all data comes from blockchain
               
@@ -97,14 +93,12 @@ const Explore: React.FC = () => {
               };
               (creator as any).createdAt = cacheInfo?.createdAt || Date.now();
               
-              console.log(`[Explore] ✅ Returning blockchain profile: ${creator.name} (${address.slice(0, 10)}...)`);
               return creator;
             } else {
-              console.log(`[Explore] No profile data found for ${address.slice(0, 10)}...`);
               return null;
             }
           } catch (e) {
-            console.warn(`[Explore] ❌ Failed to fetch profile for ${address}:`, e);
+            console.error(`[Explore] ❌ Failed to fetch profile for ${address}:`, e);
             return null;
           }
         });
@@ -117,9 +111,6 @@ const Explore: React.FC = () => {
             profilesList.push(result);
           }
         }
-        
-        console.log(`[Explore] Valid profiles after fetching: ${validResults.length}`);
-        console.log(`[Explore] Profile addresses:`, validResults.map(c => `${c.name} (${c.id.slice(0, 10)}...)`));
         
         // Sort by creation date (newest first), then by name
         const sortedProfiles = profilesList.sort((a, b) => {
@@ -134,8 +125,7 @@ const Explore: React.FC = () => {
         setCreators(sortedProfiles);
         setIsSearchMode(false);
         
-        console.log(`[Explore] Final loaded profiles: ${sortedProfiles.length}`);
-        console.log(`[Explore] Profile names:`, sortedProfiles.map(c => c.name));
+        logger.debug(`[Explore] Loaded ${sortedProfiles.length} profiles`);
       } catch (e) {
         console.error("Failed to load profiles:", e);
       } finally {
@@ -190,7 +180,7 @@ const Explore: React.FC = () => {
 
       try {
         // Search DIRECTLY in blockchain - NO CACHE
-        console.log(`[Search] Searching blockchain for: "${trimmedSearch}" (NO CACHE)`);
+        logger.debug(`[Search] Searching for: "${trimmedSearch}"`);
         
         const queryLower = trimmedSearch.toLowerCase();
         const matchingProfiles: Creator[] = [];
@@ -198,7 +188,6 @@ const Explore: React.FC = () => {
         // Search by address first (if it's an address)
         if (trimmedSearch.startsWith("aleo1")) {
           // Direct address search - fetch profile directly from blockchain
-          console.log(`[Search] Searching by address: ${trimmedSearch}`);
           const profile = await getProfileFromChain(trimmedSearch);
           if (profile) {
             const creator: Creator = {
@@ -212,20 +201,15 @@ const Explore: React.FC = () => {
               color: 'white' as const
             };
             matchingProfiles.push(creator);
-            console.log(`[Search] ✅ Found by address: ${creator.name}`);
           }
         } else {
           // Search by name/bio - get ALL profiles from blockchain and filter
-          console.log(`[Search] Searching by name/bio: "${trimmedSearch}"`);
-          
           // Get all profile addresses from blockchain
           const allProfileAddresses = await getAllRegisteredProfiles();
-          console.log(`[Search] Found ${allProfileAddresses.length} profile addresses on blockchain`);
           
           // Also check known addresses (in case they're not in registry yet)
           const knownAddresses = getKnownProfileAddresses();
           const allAddresses = new Set([...allProfileAddresses, ...knownAddresses]);
-          console.log(`[Search] Total addresses to check: ${allAddresses.size}`);
           
           // Fetch profile data for all addresses and filter by name/bio
           const fetchPromises = Array.from(allAddresses).slice(0, 200).map(async (address) => {
@@ -238,7 +222,6 @@ const Explore: React.FC = () => {
                 const bioMatch = bioLower.includes(queryLower);
                 
                 if (nameMatch || bioMatch) {
-                  console.log(`[Search] ✅ Match found: ${profile.name} (name: "${nameLower}", bio: "${bioLower}")`);
                   return {
                     id: address,
                     name: profile.name && profile.name.trim() ? profile.name : "Anonymous",
@@ -252,7 +235,7 @@ const Explore: React.FC = () => {
                 }
               }
             } catch (e) {
-              console.warn(`[Search] Failed to fetch profile for ${address}:`, e);
+              console.error(`[Search] Failed to fetch profile for ${address}:`, e);
             }
             return null;
           });
@@ -261,15 +244,11 @@ const Explore: React.FC = () => {
           matchingProfiles.push(...results.filter((p): p is Creator => p !== null));
         }
         
-        console.log(`[Search] Found ${matchingProfiles.length} matching profiles from blockchain`);
-        
         if (matchingProfiles.length > 0) {
-          console.log(`[Search] ✅ Showing ${matchingProfiles.length} profiles from blockchain`);
           setCreators(matchingProfiles);
           setSelectedCreatorForDonation(matchingProfiles[0]);
           setSearchError(null);
         } else {
-          console.log(`[Search] ❌ No profiles found in blockchain for "${trimmedSearch}"`);
           setCreators([]);
           setSearchError("No profiles found matching your search.");
         }
@@ -316,7 +295,7 @@ const Explore: React.FC = () => {
         }
         
         // STEP 1: Transfer real tokens from sender to recipient
-        console.log("💰 Step 1/2: Transferring tokens...");
+        logger.debug("Transferring tokens...");
         const transferTransaction = {
             address: String(publicKey),
             chainId: WalletAdapterNetwork.TestnetBeta,
@@ -333,8 +312,6 @@ const Explore: React.FC = () => {
             ]
         };
         
-        console.log("Transfer transaction:", JSON.stringify(transferTransaction, null, 2));
-        
         const transferTxId = await requestTransactionWithRetry(adapter, transferTransaction, {
             timeout: 30000, // 30 seconds for transfer
             maxRetries: 3
@@ -343,7 +320,7 @@ const Explore: React.FC = () => {
             throw new Error("Token transfer was rejected or failed");
         }
         
-        console.log("✅ Transfer confirmed (transfer_public):", transferTxId);
+        logger.debug("Transfer confirmed:", transferTxId);
         
         // Wait a bit for transfer to be processed
         await new Promise(resolve => setTimeout(resolve, 1500));
@@ -351,7 +328,7 @@ const Explore: React.FC = () => {
         // STEP 2: Create donation record (private)
         // send_donation(recipient, amount, message, timestamp) — contract order
         // Note: sender is automatically self.caller in the contract, don't pass it
-        console.log("📝 Step 2/2: Creating donation record (send_donation)...");
+        logger.debug("Creating donation record...");
         const messageField = stringToField(donationMessage || ""); // Use message from input
         const timestamp = Math.floor(Date.now() / 1000);
         
@@ -373,8 +350,6 @@ const Explore: React.FC = () => {
             ]
         };
         
-        console.log("Donation record transaction:", JSON.stringify(donationTransaction, null, 2));
-        
         const donationTxId = await requestTransactionWithRetry(adapter, donationTransaction, {
             timeout: 30000, // 30 seconds for donation record
             maxRetries: 3
@@ -385,7 +360,7 @@ const Explore: React.FC = () => {
             return;
         }
         
-        console.log("✅ Donation record created:", donationTxId);
+        logger.donation.sent(donationTxId);
         alert(`Donation sent successfully!\n\nFunction: send_donation\nTransfer: ${transferTxId.slice(0, 8)}...\nRecord: ${donationTxId.slice(0, 8)}...`);
         
         // Clear message after successful donation

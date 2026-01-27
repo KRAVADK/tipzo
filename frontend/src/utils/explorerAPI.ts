@@ -3,6 +3,7 @@
 
 import { PROGRAM_ID } from "../deployed_program";
 import { fieldToString } from "./aleo";
+import { logger } from "./logger";
 
 export interface Transaction {
     id: string;
@@ -85,7 +86,7 @@ export const getPublicProfilesRegistry = async (): Promise<string[]> => {
                 }
                 
                 if (addresses.length > 0) {
-                    console.log(`[Registry] Loaded ${addresses.length} profiles from ${url}`);
+                    logger.debug(`[Registry] Loaded ${addresses.length} profiles from ${url}`);
                     return addresses;
                 }
             }
@@ -107,7 +108,7 @@ export const getProfileCount = async (): Promise<number> => {
         if (!response.ok) {
             // 404 is normal for new contracts where no profiles have been created yet
             if (response.status === 404) {
-                console.log("[Registry] Profile count mapping not initialized yet (no profiles created)");
+                logger.debug("[Registry] Profile count mapping not initialized yet");
                 return 0;
             }
             console.warn("Failed to get profile count:", response.statusText);
@@ -172,13 +173,13 @@ export const scanBlockchainForProfiles = async (): Promise<string[]> => {
     const discoveredAddresses = new Set<string>();
     
     try {
-        console.log("[Blockchain Scan] Scanning for profiles using Provable API v2...");
+        logger.debug("[Blockchain Scan] Scanning for profiles...");
         
         // Method 1: Use registry mapping (if available) - fastest
         try {
             const count = await getProfileCount();
             if (count > 0) {
-                console.log(`[Blockchain Scan] Found ${count} profiles in registry mapping`);
+                logger.debug(`[Blockchain Scan] Found ${count} profiles in registry mapping`);
                 for (let i = 0; i < Math.min(count, 1000); i++) {
                     const address = await getProfileAddressAtIndex(i);
                     if (address) {
@@ -187,7 +188,7 @@ export const scanBlockchainForProfiles = async (): Promise<string[]> => {
                 }
             }
         } catch (e) {
-            console.warn("[Blockchain Scan] Failed to get profiles from registry:", e);
+            logger.warn("[Blockchain Scan] Failed to get profiles from registry:", e);
         }
         
         // Method 2: Use Provable API v2 latest-calls endpoint (most efficient)
@@ -197,14 +198,14 @@ export const scanBlockchainForProfiles = async (): Promise<string[]> => {
         for (const programId of programIds) {
             try {
                 const latestCallsUrl = `${PROVABLE_API_V2_BASE}/programs/${programId}/latest-calls`;
-                console.log(`[Blockchain Scan] Fetching latest calls from: ${latestCallsUrl}`);
+                logger.debug(`[Blockchain Scan] Fetching latest calls from: ${latestCallsUrl}`);
                 
                 const response = await fetch(latestCallsUrl);
                 if (response.ok) {
                     const calls = await response.json();
                     const callsArray = Array.isArray(calls) ? calls : (calls.calls || calls.data || []);
                     
-                    console.log(`[Blockchain Scan] Found ${callsArray.length} calls for ${programId}`);
+                    logger.debug(`[Blockchain Scan] Found ${callsArray.length} calls for ${programId}`);
                     
                     callsArray.forEach((call: any) => {
                         // Extract function name and caller address
@@ -223,7 +224,6 @@ export const scanBlockchainForProfiles = async (): Promise<string[]> => {
                             
                             if (address && typeof address === 'string' && address.startsWith('aleo1')) {
                                 discoveredAddresses.add(address);
-                                console.log(`[Blockchain Scan] Found profile call: ${functionName} by ${address.slice(0, 10)}...`);
                             }
                         }
                     });
@@ -241,7 +241,7 @@ export const scanBlockchainForProfiles = async (): Promise<string[]> => {
         // Method 3: Fallback - Scan recent blocks if API v2 doesn't work
         if (discoveredAddresses.size === 0) {
             try {
-                console.log("[Blockchain Scan] Fallback: Scanning recent blocks...");
+                logger.debug("[Blockchain Scan] Fallback: Scanning recent blocks...");
                 const latestBlockUrl = `${PROVABLE_API_V1_BASE}/latest/block`;
                 const blockResponse = await fetch(latestBlockUrl);
                 
@@ -252,7 +252,7 @@ export const scanBlockchainForProfiles = async (): Promise<string[]> => {
                     if (latestHeight) {
                         // Scan last 50 blocks for profile transactions
                         const startHeight = Math.max(0, latestHeight - 50);
-                        console.log(`[Blockchain Scan] Scanning blocks ${startHeight} to ${latestHeight}...`);
+                        logger.debug(`[Blockchain Scan] Scanning blocks ${startHeight} to ${latestHeight}...`);
                         
                         for (let height = latestHeight; height >= startHeight && height >= 0; height--) {
                             try {
@@ -277,7 +277,6 @@ export const scanBlockchainForProfiles = async (): Promise<string[]> => {
                                                 
                                                 if (address && address.startsWith('aleo1')) {
                                                     discoveredAddresses.add(address);
-                                                    console.log(`[Blockchain Scan] Found profile in block ${height}: ${functionName} by ${address.slice(0, 10)}...`);
                                                 }
                                             }
                                         });
@@ -297,7 +296,7 @@ export const scanBlockchainForProfiles = async (): Promise<string[]> => {
         // Method 4: Verify known addresses have profiles
         try {
             const knownAddresses = getKnownProfileAddresses();
-            console.log(`[Blockchain Scan] Verifying ${knownAddresses.length} known addresses from blockchain...`);
+            logger.debug(`[Blockchain Scan] Verifying ${knownAddresses.length} known addresses...`);
             
             const checkPromises = knownAddresses.slice(0, 50).map(async (address) => {
                 try {
@@ -318,7 +317,7 @@ export const scanBlockchainForProfiles = async (): Promise<string[]> => {
         }
         
         const addresses = Array.from(discoveredAddresses).filter(addr => addr && typeof addr === 'string' && addr.startsWith('aleo1'));
-        console.log(`[Blockchain Scan] Discovered ${addresses.length} unique profile addresses from blockchain`);
+        logger.debug(`[Blockchain Scan] Discovered ${addresses.length} unique profile addresses`);
         return addresses;
     } catch (error) {
         console.error("[Blockchain Scan] Error scanning blockchain for profiles:", error);
@@ -331,7 +330,7 @@ export const getAllRegisteredProfiles = async (): Promise<string[]> => {
     try {
         // First try the registry mapping (fastest if it exists)
         const count = await getProfileCount();
-        console.log(`[Registry] Found ${count} registered profiles on blockchain registry`);
+        logger.debug(`[Registry] Found ${count} registered profiles on blockchain registry`);
         
         const addressesFromRegistry: string[] = [];
         if (count > 0) {
@@ -354,7 +353,7 @@ export const getAllRegisteredProfiles = async (): Promise<string[]> => {
         const allAddresses = new Set([...addressesFromRegistry, ...scannedAddresses]);
         const uniqueAddresses = Array.from(allAddresses);
         
-        console.log(`[Registry] Total unique profiles: ${uniqueAddresses.length} (${addressesFromRegistry.length} from registry, ${scannedAddresses.length} from scan)`);
+        logger.debug(`[Registry] Total unique profiles: ${uniqueAddresses.length}`);
         return uniqueAddresses;
     } catch (error) {
         console.error("Error fetching all registered profiles:", error);
@@ -384,7 +383,7 @@ export const addKnownProfileAddress = (address: string) => {
         if (!knownAddresses.includes(address)) {
             knownAddresses.push(address);
             localStorage.setItem('tipzo_known_profiles', JSON.stringify(knownAddresses));
-            console.log(`[Cache] Added ${address} to known profiles list`);
+            logger.debug(`[Cache] Added ${address} to known profiles list`);
         }
     } catch (e) {
         console.warn("Failed to add known profile:", e);
@@ -402,7 +401,7 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
     try {
         // Try new contract first (v6)
         const url = `${MAPPING_URL}/${PROGRAM_ID}/mapping/profiles/${address}`;
-        console.log(`Fetching profile from: ${url}`);
+        logger.debug(`Fetching profile from: ${address}`);
         
         let response = await fetch(url);
         
@@ -410,14 +409,13 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
         if (!response.ok && response.status === 404) {
             const oldProgramId = "tipzo_app_v5.aleo";
             const oldUrl = `${MAPPING_URL}/${oldProgramId}/mapping/profiles/${address}`;
-            console.log(`Profile not found in v6, trying old contract: ${oldUrl}`);
+            logger.debug(`Profile not found in v6, trying old contract`);
             response = await fetch(oldUrl);
         }
         
         if (!response.ok) {
             // 404 is normal if profile doesn't exist yet
             if (response.status === 404) {
-                console.log(`Profile not found for address: ${address.slice(0, 10)}...`);
                 return null;
             }
             console.warn("Profile not found or error fetching:", response.statusText);
@@ -425,7 +423,7 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
         }
 
         const data = await response.json();
-        console.log("Raw profile data from API:", JSON.stringify(data, null, 2));
+        logger.debug("Raw profile data from API:", address);
         
         // Add to known profiles list for blockchain scanning
         if (data) {
@@ -433,7 +431,7 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
         }
         
         if (!data) {
-            console.warn("Empty data returned from API");
+            console.warn("⚠️ Empty data returned from API");
             return null;
         }
 
@@ -467,7 +465,7 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
                     rawName = nameMatch2?.[1];
                     rawBio = bioMatch2?.[1];
                 } catch (e) {
-                    console.warn("Failed to parse string format:", e);
+                    console.warn("⚠️ Failed to parse string format:", e);
                 }
             }
         } else if (typeof data === 'object' && data !== null) {
@@ -482,14 +480,14 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
             }
         }
         
-        console.log("Parsed fields:", { rawName, rawBio });
+        logger.debug("Parsed fields:", address);
         
         // If we have at least name field, return profile (even if empty)
         if (rawName) {
             const decodedName = fieldToString(rawName);
             const decodedBio = rawBio ? fieldToString(rawBio) : "";
             
-            console.log("Decoded profile:", { name: decodedName, bio: decodedBio });
+            logger.debug("Decoded profile:", address);
             
             const profileData = {
                 name: decodedName,
@@ -501,7 +499,7 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
             return profileData;
         }
         
-        console.warn("Could not parse profile data - no name field found");
+        console.warn("⚠️ Could not parse profile data - no name field found");
         return null;
         
     } catch (error) {
