@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NeoCard, NeoButton, NeoInput, NeoTextArea, WalletRequiredModal } from '../components/NeoComponents';
 import { UserProfile } from '../utils/explorerAPI';
-import { Save, Wallet, Loader2, DollarSign, X } from 'lucide-react';
+import { Save, Wallet, Loader2, DollarSign, X, Twitter } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
 import { getProfileFromChain, addKnownProfileAddress } from '../utils/explorerAPI';
 import { stringToField } from '../utils/aleo';
@@ -27,14 +27,12 @@ const Profile: React.FC = () => {
     defaultDonationAmount: string;
     defaultDonationMessage: string;
     autoFillQuickDonate: boolean;
-    language: 'en';
     enableAnimations: boolean;
     enableDebugLogs: boolean;
   }>({
     defaultDonationAmount: "1",
     defaultDonationMessage: "",
     autoFillQuickDonate: true,
-    language: 'en',
     enableAnimations: true,
     enableDebugLogs: false,
   });
@@ -89,6 +87,26 @@ const Profile: React.FC = () => {
       console.warn("[Profile] Failed to save settings", e);
     }
   };
+
+  // Apply default donation settings to profile donation form (for sending from this wallet)
+  useEffect(() => {
+    try {
+      if (publicKey) {
+        const raw = localStorage.getItem(`tipzo_profile_settings_${publicKey}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.defaultDonationAmount) {
+            setDonationAmount(parsed.defaultDonationAmount);
+          }
+          if (parsed.autoFillQuickDonate && parsed.defaultDonationMessage) {
+            setDonationMessage(parsed.defaultDonationMessage);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[Profile] Failed to apply default donation settings", e);
+    }
+  }, [publicKey]);
   
   const [profile, setProfile] = useState<UserProfile & { handle: string }>({
     name: '',
@@ -397,6 +415,41 @@ const Profile: React.FC = () => {
               <p className="text-xs font-mono break-all bg-white p-2 border border-black">{profileAddress || publicKey || 'N/A'}</p>
            </NeoCard>
 
+           {/* Social connections (disabled placeholder, like Explore) */}
+           <NeoCard color="white" className="p-4 space-y-3">
+             <h3 className="font-bold text-sm flex items-center gap-2 text-gray-500">
+               <span className="w-2 h-2 rounded-full bg-gray-400" />
+               Social connections (coming soon)
+             </h3>
+             <div className="flex flex-col gap-2">
+               <button
+                 type="button"
+                 disabled
+                 className="flex items-center justify-between px-3 py-2 border-2 border-dashed border-gray-400 bg-gray-100 text-gray-400 font-semibold text-sm cursor-not-allowed"
+               >
+                 <span className="flex items-center gap-2">
+                   <Twitter size={16} />
+                   Connect Twitter
+                 </span>
+                 <span className="text-[10px] uppercase tracking-wide">Soon</span>
+               </button>
+               <button
+                 type="button"
+                 disabled
+                 className="flex items-center justify-between px-3 py-2 border-2 border-dashed border-gray-400 bg-gray-100 text-gray-400 font-semibold text-sm cursor-not-allowed"
+               >
+                 <span className="flex items-center gap-2">
+                   <span className="w-4 h-4 rounded-full border-2 border-gray-400 flex items-center justify-center text-[9px]">D</span>
+                   Connect Discord
+                 </span>
+                 <span className="text-[10px] uppercase tracking-wide">Soon</span>
+               </button>
+               <p className="text-[11px] text-gray-500">
+                 Basic linking flow is prepared under the hood, but integrations are disabled until a future release.
+               </p>
+             </div>
+           </NeoCard>
+
            {isViewingOtherProfile && (
              <NeoCard color="white" className="p-4">
                <p className="font-medium text-sm mb-2">{profile.bio || "No bio"}</p>
@@ -580,22 +633,6 @@ const Profile: React.FC = () => {
                     />
                     <span>Show extra debug logs in browser console</span>
                   </label>
-                  <div className="space-y-1 pt-1">
-                    <label className="font-bold text-sm">Language</label>
-                    <select
-                      className="border-2 border-black px-3 py-1 bg-white font-medium"
-                      value={profileSettings.language}
-                      onChange={(e) => {
-                        const value = e.target.value as 'en';
-                        const updated = { ...profileSettings, language: value };
-                        setProfileSettings(updated);
-                        persistSettings(updated);
-                      }}
-                    >
-                      <option value="en">English</option>
-                    </select>
-                    <p className="text-xs text-gray-500">More languages will be added in future updates.</p>
-                  </div>
                 </div>
               </NeoCard>
             </div>
