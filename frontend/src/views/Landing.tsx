@@ -9,13 +9,13 @@ interface LandingProps {
 const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Hero Section */}
-      <section className="flex flex-col md:flex-row items-center justify-between px-6 py-20 max-w-7xl mx-auto w-full gap-12">
+      {/* Hero Section — headline visible in dark mode (white text) */}
+      <section className="tipzo-hero flex flex-col md:flex-row items-center justify-between px-6 py-20 max-w-7xl mx-auto w-full gap-12">
         <div className="flex-1 space-y-8 z-10">
           <div className="inline-block border-2 border-black bg-tipzo-pink px-4 py-2 font-bold shadow-neo-sm rotate-[-2deg]">
             Now Live on Aleo Testnet
           </div>
-          <h1 className="text-6xl md:text-8xl font-black leading-[0.9] tracking-tight">
+          <h1 className="text-6xl md:text-8xl font-black leading-[0.9] tracking-tight tipzo-hero-headline">
             SUPPORT<br/>
             CREATORS<br/>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-tipzo-orange to-tipzo-pink stroke-black" style={{ WebkitTextStroke: '2px black' }}>PRIVATELY</span>
@@ -47,7 +47,7 @@ const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
 
       {/* Features Grid - light card backgrounds: black text in dark mode */}
       <section className="tipzo-page-light-frames px-6 py-24 max-w-7xl mx-auto w-full">
-        <h2 className="text-5xl font-black mb-16 text-center tipzo-dark-white">WHY TIPZO?</h2>
+        <h2 className="text-5xl font-black mb-16 text-center">WHY TIPZO?</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           <NeoCard color="yellow" className="h-full flex flex-col items-start gap-4 hover:-translate-y-2 transition-transform">
             <div className="p-3 bg-white border-2 border-black shadow-neo-sm">
