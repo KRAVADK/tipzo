@@ -45,9 +45,9 @@ const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
         </div>
       </div>
 
-      {/* Features Grid */}
-      <section className="px-6 py-24 max-w-7xl mx-auto w-full">
-        <h2 className="text-5xl font-black mb-16 text-center">WHY TIPZO?</h2>
+      {/* Features Grid - light card backgrounds: black text in dark mode */}
+      <section className="tipzo-page-light-frames px-6 py-24 max-w-7xl mx-auto w-full">
+        <h2 className="text-5xl font-black mb-16 text-center tipzo-dark-white">WHY TIPZO?</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           <NeoCard color="yellow" className="h-full flex flex-col items-start gap-4 hover:-translate-y-2 transition-transform">
             <div className="p-3 bg-white border-2 border-black shadow-neo-sm">
@@ -83,8 +83,8 @@ const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="px-6 py-20 bg-tipzo-blue text-center mb-20">
+      {/* CTA Section - white card: black text in dark mode */}
+      <section className="tipzo-page-light-frames px-6 py-20 bg-tipzo-blue text-center mb-20">
          <NeoCard className="max-w-4xl mx-auto bg-white" color="white">
             <div className="flex flex-col items-center gap-6">
               <h2 className="text-4xl md:text-5xl font-black">Ready to join the revolution?</h2>
