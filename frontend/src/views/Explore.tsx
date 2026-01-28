@@ -133,6 +133,26 @@ const Explore: React.FC = () => {
         isReloading = false;
       }
   };
+
+  // Apply default donation settings from profile (global default)
+  useEffect(() => {
+    try {
+      if (publicKey) {
+        const raw = localStorage.getItem(`tipzo_profile_settings_${publicKey}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.defaultDonationAmount) {
+            setDonationAmount(parsed.defaultDonationAmount);
+          }
+          if (parsed.autoFillQuickDonate && parsed.defaultDonationMessage) {
+            setDonationMessage(parsed.defaultDonationMessage);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[Explore] Failed to apply default donation settings", e);
+    }
+  }, [publicKey]);
   
   // Load all profiles on component mount and when profile is created
   useEffect(() => {
