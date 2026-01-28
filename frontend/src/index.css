@@ -102,6 +102,11 @@ body.tipzo-dark .tipzo-hero .tipzo-hero-headline {
   color: #f8fafc !important;
 }
 
+/* Hero subtitle readable in dark mode */
+body.tipzo-dark .tipzo-hero .tipzo-hero-subtitle {
+  color: #e5e7eb !important;
+}
+
 /* First page: section title WHY TIPZO? white in dark mode */
 body.tipzo-dark .tipzo-page-light-frames > h2 {
   color: #fff !important;

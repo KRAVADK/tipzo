@@ -20,7 +20,7 @@ const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
             CREATORS<br/>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-tipzo-orange to-tipzo-pink stroke-black" style={{ WebkitTextStroke: '2px black' }}>PRIVATELY</span>
           </h1>
-          <p className="text-xl font-medium text-gray-700 max-w-lg">
+          <p className="tipzo-hero-subtitle text-xl font-medium text-gray-700 max-w-lg">
             Tipzo is the first anonymous donation platform powered by zero-knowledge proofs. 
             Support your favorite artists without exposing your identity.
           </p>
