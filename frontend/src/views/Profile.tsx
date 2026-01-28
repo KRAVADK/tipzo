@@ -23,6 +23,72 @@ const Profile: React.FC = () => {
   const [showDonationForm, setShowDonationForm] = useState(false);
   const [donationAmount, setDonationAmount] = useState<string>("1");
   const [donationMessage, setDonationMessage] = useState<string>("");
+  const [profileSettings, setProfileSettings] = useState<{
+    defaultDonationAmount: string;
+    defaultDonationMessage: string;
+    autoFillQuickDonate: boolean;
+    language: 'en';
+    enableAnimations: boolean;
+    enableDebugLogs: boolean;
+  }>({
+    defaultDonationAmount: "1",
+    defaultDonationMessage: "",
+    autoFillQuickDonate: true,
+    language: 'en',
+    enableAnimations: true,
+    enableDebugLogs: false,
+  });
+
+  // Load profile & app settings from localStorage
+  useEffect(() => {
+    const key = profileAddress || publicKey;
+    try {
+      if (key) {
+        const raw = localStorage.getItem(`tipzo_profile_settings_${key}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setProfileSettings(prev => ({ ...prev, ...parsed }));
+        }
+      }
+      const appRaw = localStorage.getItem('tipzo_app_settings');
+      if (appRaw) {
+        const appParsed = JSON.parse(appRaw);
+        setProfileSettings(prev => ({
+          ...prev,
+          enableAnimations: appParsed.enableAnimations ?? prev.enableAnimations,
+          enableDebugLogs: appParsed.enableDebugLogs ?? prev.enableDebugLogs,
+        }));
+        if (appParsed.enableAnimations === false) {
+          document.body.classList.add('tipzo-animations-off');
+        } else {
+          document.body.classList.remove('tipzo-animations-off');
+        }
+      }
+    } catch (e) {
+      console.warn("[Profile] Failed to load settings", e);
+    }
+  }, [profileAddress, publicKey]);
+
+  const persistSettings = (updated: typeof profileSettings) => {
+    const key = profileAddress || publicKey;
+    try {
+      if (key) {
+        localStorage.setItem(`tipzo_profile_settings_${key}`, JSON.stringify(updated));
+      }
+      const appSettings = {
+        enableAnimations: updated.enableAnimations,
+        enableDebugLogs: updated.enableDebugLogs,
+      };
+      localStorage.setItem('tipzo_app_settings', JSON.stringify(appSettings));
+      if (updated.enableAnimations === false) {
+        document.body.classList.add('tipzo-animations-off');
+      } else {
+        document.body.classList.remove('tipzo-animations-off');
+      }
+    } catch (e) {
+      console.warn("[Profile] Failed to save settings", e);
+    }
+  };
   
   const [profile, setProfile] = useState<UserProfile & { handle: string }>({
     name: '',
@@ -406,28 +472,133 @@ const Profile: React.FC = () => {
               )}
             </NeoCard>
           ) : (
-            // Edit own profile
-            <NeoCard color="white" className="space-y-6">
-               {loading && <div className="text-center"><Loader2 className="animate-spin inline"/> Loading profile...</div>}
-               
-               <div className="space-y-2">
-                 <label className="font-bold text-lg">Display Name (Max 30 chars)</label>
-                 <NeoInput name="name" value={profile.name} onChange={handleChange} maxLength={30} />
-               </div>
+            // Edit own profile + settings
+            <div className="space-y-6">
+              <NeoCard color="white" className="space-y-6">
+                 {loading && <div className="text-center"><Loader2 className="animate-spin inline"/> Loading profile...</div>}
+                 
+                 <div className="space-y-2">
+                   <label className="font-bold text-lg">Display Name (Max 30 chars)</label>
+                   <NeoInput name="name" value={profile.name} onChange={handleChange} maxLength={30} />
+                 </div>
 
-               <div className="space-y-2">
-                 <label className="font-bold text-lg">Bio (Max 30 chars)</label>
-                 <NeoTextArea name="bio" value={profile.bio} onChange={handleChange} rows={2} maxLength={30} />
-                 <p className="text-xs text-gray-500">Note: Aleo 'field' type limits text length. Future updates will support longer bios.</p>
-               </div>
+                 <div className="space-y-2">
+                   <label className="font-bold text-lg">Bio (Max 30 chars)</label>
+                   <NeoTextArea name="bio" value={profile.bio} onChange={handleChange} rows={2} maxLength={30} />
+                   <p className="text-xs text-gray-500">Note: Aleo 'field' type limits text length. Future updates will support longer bios.</p>
+                 </div>
 
-               <div className="pt-4 border-t-2 border-gray-200 flex justify-end">
-                 <NeoButton className="flex items-center gap-2" size="lg" onClick={handleSave} disabled={saving}>
-                   {saving ? <Loader2 className="animate-spin" size={20}/> : <Save size={20} />} 
-                   {existsOnChain ? "Update Profile" : "Create Profile"}
-                 </NeoButton>
-               </div>
-            </NeoCard>
+                 <div className="pt-4 border-t-2 border-gray-200 flex justify-end">
+                   <NeoButton className="flex items-center gap-2" size="lg" onClick={handleSave} disabled={saving}>
+                     {saving ? <Loader2 className="animate-spin" size={20}/> : <Save size={20} />} 
+                     {existsOnChain ? "Update Profile" : "Create Profile"}
+                   </NeoButton>
+                 </div>
+              </NeoCard>
+
+              {/* Profile-level donation preferences */}
+              <NeoCard color="white" className="space-y-4">
+                <h2 className="text-xl font-black">Profile Donation Preferences</h2>
+                <p className="text-sm text-gray-600">
+                  These settings are stored locally in your browser and help pre-fill donation forms.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="font-bold text-sm">Default Donation Amount (ALEO)</label>
+                    <NeoInput
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={profileSettings.defaultDonationAmount}
+                      onChange={(e) => {
+                        const updated = { ...profileSettings, defaultDonationAmount: e.target.value };
+                        setProfileSettings(updated);
+                        persistSettings(updated);
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="font-bold text-sm">Default Donation Message</label>
+                    <NeoInput
+                      type="text"
+                      maxLength={30}
+                      value={profileSettings.defaultDonationMessage}
+                      onChange={(e) => {
+                        const updated = { ...profileSettings, defaultDonationMessage: e.target.value };
+                        setProfileSettings(updated);
+                        persistSettings(updated);
+                      }}
+                      placeholder="Thanks for supporting my work!"
+                    />
+                  </div>
+                </div>
+                <label className="flex items-center gap-3 mt-2 text-sm font-medium cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 border-2 border-black"
+                    checked={profileSettings.autoFillQuickDonate}
+                    onChange={(e) => {
+                      const updated = { ...profileSettings, autoFillQuickDonate: e.target.checked };
+                      setProfileSettings(updated);
+                      persistSettings(updated);
+                    }}
+                  />
+                  <span>Auto-fill Quick Donate with my defaults</span>
+                </label>
+              </NeoCard>
+
+              {/* App-wide settings */}
+              <NeoCard color="white" className="space-y-4">
+                <h2 className="text-xl font-black">App Settings</h2>
+                <p className="text-sm text-gray-600">
+                  These settings affect how TipZo behaves on this device.
+                </p>
+                <div className="space-y-3">
+                  <label className="flex items-center gap-3 text-sm font-medium cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 border-2 border-black"
+                      checked={profileSettings.enableAnimations}
+                      onChange={(e) => {
+                        const updated = { ...profileSettings, enableAnimations: e.target.checked };
+                        setProfileSettings(updated);
+                        persistSettings(updated);
+                      }}
+                    />
+                    <span>Enable animations and motion effects</span>
+                  </label>
+                  <label className="flex items-center gap-3 text-sm font-medium cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 border-2 border-black"
+                      checked={profileSettings.enableDebugLogs}
+                      onChange={(e) => {
+                        const updated = { ...profileSettings, enableDebugLogs: e.target.checked };
+                        setProfileSettings(updated);
+                        persistSettings(updated);
+                      }}
+                    />
+                    <span>Show extra debug logs in browser console</span>
+                  </label>
+                  <div className="space-y-1 pt-1">
+                    <label className="font-bold text-sm">Language</label>
+                    <select
+                      className="border-2 border-black px-3 py-1 bg-white font-medium"
+                      value={profileSettings.language}
+                      onChange={(e) => {
+                        const value = e.target.value as 'en';
+                        const updated = { ...profileSettings, language: value };
+                        setProfileSettings(updated);
+                        persistSettings(updated);
+                      }}
+                    >
+                      <option value="en">English</option>
+                    </select>
+                    <p className="text-xs text-gray-500">More languages will be added in future updates.</p>
+                  </div>
+                </div>
+              </NeoCard>
+            </div>
           )}
         </div>
       </div>

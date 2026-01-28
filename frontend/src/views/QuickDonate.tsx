@@ -22,6 +22,69 @@ const QuickDonate: React.FC = () => {
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [selectedCreatorForDonation, setSelectedCreatorForDonation] = useState<Creator | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [donatingToId, setDonatingToId] = useState<string | null>(null);
+  const [recentRecipients, setRecentRecipients] = useState<{ address: string; name: string }[]>([]);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  // Load profile-level defaults for donation form
+  useEffect(() => {
+    try {
+      if (publicKey && !settingsLoaded) {
+        const raw = localStorage.getItem(`tipzo_profile_settings_${publicKey}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.defaultDonationAmount) {
+            setDonationAmount(parsed.defaultDonationAmount);
+          }
+          if (parsed.autoFillQuickDonate && parsed.defaultDonationMessage) {
+            setDonationMessage(parsed.defaultDonationMessage);
+          }
+        }
+        setSettingsLoaded(true);
+      }
+    } catch (e) {
+      console.warn("[QuickDonate] Failed to apply profile settings", e);
+    }
+  }, [publicKey, settingsLoaded]);
+
+  // Load recently tipped recipients from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('tipzo_quick_recent_recipients');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setRecentRecipients(parsed.slice(0, 5));
+        }
+      }
+    } catch (e) {
+      console.warn("[QuickDonate] Failed to load recent recipients", e);
+    }
+  }, []);
+
+  const rememberRecipient = (address: string, name: string) => {
+    try {
+      const normalizedName = name && name.trim() ? name : "Anonymous";
+      const existingRaw = localStorage.getItem('tipzo_quick_recent_recipients');
+      let list: { address: string; name: string }[] = [];
+      if (existingRaw) {
+        const parsed = JSON.parse(existingRaw);
+        if (Array.isArray(parsed)) {
+          list = parsed;
+        }
+      }
+      // Remove if already present
+      list = list.filter(item => item.address !== address);
+      // Add to front
+      list.unshift({ address, name: normalizedName });
+      // Keep max 5
+      list = list.slice(0, 5);
+      localStorage.setItem('tipzo_quick_recent_recipients', JSON.stringify(list));
+      setRecentRecipients(list);
+    } catch (e) {
+      console.warn("[QuickDonate] Failed to remember recipient", e);
+    }
+  };
 
   // Search-based only: no automatic loading of all profiles
   useEffect(() => {
@@ -131,6 +194,7 @@ const QuickDonate: React.FC = () => {
     }
 
     try {
+      setDonatingToId(creator.id);
       const amountNum = parseFloat(donationAmount);
       if (isNaN(amountNum) || amountNum <= 0) {
         alert("Please enter a valid donation amount");
@@ -214,15 +278,25 @@ const QuickDonate: React.FC = () => {
     } catch (e) {
       console.error("[QuickDonate] Donation failed:", e);
       alert("Donation failed: " + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setDonatingToId(null);
+      // Remember successful recipient for quick access
+      rememberRecipient(creator.id, creator.name);
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
-        <div>
-          <h1 className="text-5xl font-black mb-2">QUICK DONATE</h1>
-          <p className="text-xl font-medium text-gray-600">Find a creator and send a tip instantly.</p>
+        <div className="space-y-2">
+          <h1 className="text-5xl font-black mb-1">QUICK DONATE</h1>
+          <p className="text-xl font-medium text-gray-600">
+            Find a creator and send a tip instantly. Fully private sender, public profile.
+          </p>
+          <div className="inline-flex items-center gap-2 px-3 py-1 border-2 border-black bg-white shadow-neo-sm text-sm font-semibold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>{publicKey ? "Wallet connected – ready to tip." : "Connect wallet to send a private donation."}</span>
+          </div>
         </div>
         <div className="w-full md:w-1/3 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-black pointer-events-none" size={20} />
@@ -236,9 +310,55 @@ const QuickDonate: React.FC = () => {
         </div>
       </div>
 
+      {/* Recent recipients strip */}
+      {recentRecipients.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-gray-700 mr-1">Recent tips:</span>
+          {recentRecipients.map((item) => (
+            <button
+              key={item.address}
+              onClick={() => {
+                setSearchTerm(item.name || item.address);
+              }}
+              className="text-xs md:text-sm px-3 py-1 border-2 border-black bg-white hover:bg-tipzo-yellow transition-colors shadow-neo-sm active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+            >
+              {item.name} · {item.address.slice(0, 6)}...{item.address.slice(-4)}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Skeleton cards when loading initial search */}
+        {loading && creators.length === 0 && (
+          <>
+            {[0, 1, 2].map((i) => (
+              <NeoCard key={`skeleton-${i}`} color="yellow" className="flex flex-col gap-4 animate-pulse">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-16 h-16 border-2 border-black bg-gray-200" />
+                    <div className="space-y-2">
+                      <div className="h-4 w-32 bg-gray-200 border-2 border-black" />
+                      <div className="h-3 w-40 bg-gray-200 border-2 border-black" />
+                    </div>
+                  </div>
+                  <NeoBadge color="bg-gray-200">...</NeoBadge>
+                </div>
+                <div className="h-3 w-full bg-gray-200 border-2 border-black" />
+                <div className="mt-auto pt-4">
+                  <div className="h-9 w-full bg-gray-200 border-2 border-black" />
+                </div>
+              </NeoCard>
+            ))}
+          </>
+        )}
+
         {creators.map((creator) => (
-          <NeoCard key={creator.id} color={creator.color} className="flex flex-col gap-4">
+          <NeoCard 
+            key={creator.id} 
+            color={creator.color} 
+            className="flex flex-col gap-4 transition-transform duration-200 hover:-translate-y-1 hover:shadow-neo"
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <img src={creator.avatar} alt={creator.name} className="w-16 h-16 border-2 border-black object-cover" />
@@ -293,6 +413,20 @@ const QuickDonate: React.FC = () => {
                           className="w-full text-lg font-bold border-2 border-black"
                           autoFocus={false}
                         />
+                        <div className="flex flex-wrap gap-2 text-xs font-semibold mt-1">
+                          <span className="text-gray-500 mr-1">Quick amounts:</span>
+                          {["1", "2", "5"].map((amt) => (
+                            <NeoButton
+                              key={amt}
+                              size="sm"
+                              variant={donationAmount === amt ? "accent" : "secondary"}
+                              className="px-2 py-0 text-xs"
+                              onClick={() => setDonationAmount(amt)}
+                            >
+                              {amt} ALEO
+                            </NeoButton>
+                          ))}
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <label className="font-bold text-sm">Message (Optional)</label>
@@ -309,8 +443,17 @@ const QuickDonate: React.FC = () => {
                       <NeoButton
                         className="flex-1 flex items-center justify-center gap-2"
                         onClick={() => handleDonate(creator)}
+                        disabled={donatingToId === creator.id}
                       >
-                        <DollarSign size={18} /> Donate
+                        {donatingToId === creator.id ? (
+                          <>
+                            <Loader2 size={18} className="animate-spin" /> Sending...
+                          </>
+                        ) : (
+                          <>
+                            <DollarSign size={18} /> Donate
+                          </>
+                        )}
                       </NeoButton>
                     </div>
                   ) : (
