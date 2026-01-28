@@ -3,7 +3,7 @@ import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-ro
 import { WalletProvider, useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { LeoWalletAdapter } from "@demox-labs/aleo-wallet-adapter-leo";
 import { DecryptPermission, WalletAdapterNetwork, WalletName } from "@demox-labs/aleo-wallet-adapter-base";
-import { LayoutGrid, User, History as HistoryIcon, Menu, X, Wallet, LogOut, Moon, Sun } from 'lucide-react';
+import { LayoutGrid, User, History as HistoryIcon, Menu, X, Wallet, LogOut, Moon, Sun, Bell } from 'lucide-react';
 
 import Landing from './views/Landing';
 import History from './views/History';
@@ -62,6 +62,16 @@ const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  type NotificationItem = {
+    id: string;
+    type: 'sent' | 'received';
+    message: string;
+    timestamp: number;
+    read: boolean;
+  };
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notifPage, setNotifPage] = useState(0);
   
   // Wallet hooks
   const { publicKey, disconnect, select, wallets } = useWallet();
@@ -93,6 +103,57 @@ const Navbar: React.FC = () => {
     } catch {
       // ignore
     }
+  }, []);
+
+  // Load notifications from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('tipzo_notifications');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const normalized: NotificationItem[] = parsed.map((n: any) => ({
+            id: String(n.id || `${Date.now()}-${Math.random()}`),
+            type: n.type === 'received' ? 'received' : 'sent',
+            message: String(n.message || ''),
+            timestamp: typeof n.timestamp === 'number' ? n.timestamp : Date.now(),
+            read: !!n.read,
+          }));
+          setNotifications(normalized);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Listen for global donation notifications
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<any>).detail;
+      if (!detail) return;
+      const item: NotificationItem = {
+        id: typeof detail.id === 'string' && detail.id ? detail.id : `${Date.now()}-${Math.random()}`,
+        type: detail.type === 'received' ? 'received' : 'sent',
+        message: String(detail.message || ''),
+        timestamp: typeof detail.timestamp === 'number' ? detail.timestamp : Date.now(),
+        read: false,
+      };
+      setNotifications(prev => {
+        const next = [item, ...prev].slice(0, 20);
+        try {
+          localStorage.setItem('tipzo_notifications', JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+      setNotifPage(0);
+    };
+    window.addEventListener('tipzo-notification', handler as EventListener);
+    return () => {
+      window.removeEventListener('tipzo-notification', handler as EventListener);
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -137,6 +198,16 @@ const Navbar: React.FC = () => {
 
   const truncateAddress = (addr: string) => `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
+  const pageSize = 3;
+  const totalPages = Math.max(1, Math.ceil(notifications.length / pageSize));
+  const safePage = Math.min(notifPage, totalPages - 1);
+  if (safePage !== notifPage) {
+    setNotifPage(safePage);
+  }
+  const startIndex = safePage * pageSize;
+  const visibleNotifications = notifications.slice(startIndex, startIndex + pageSize);
+  const unreadCount = notifications.filter(n => !n.read).length;
+
   return (
     <>
       <nav className="sticky top-0 z-50 bg-[#fafaf9] border-b-2 border-black px-6 py-4">
@@ -163,17 +234,128 @@ const Navbar: React.FC = () => {
                   </span>
                 );
               }
+              const active = isActive(item.path);
+              const activeColor = theme === 'dark' ? 'text-white' : 'text-black';
+              const inactiveColor = theme === 'dark' ? 'text-gray-300 hover:text-white' : 'text-gray-500 hover:text-black';
               return (
                 <Link 
                   key={item.path} 
                   to={item.path}
-                  className={`flex items-center gap-2 font-bold text-lg transition-colors ${isActive(item.path) ? 'text-black underline decoration-4 underline-offset-4 decoration-tipzo-green' : 'text-gray-500 hover:text-black'}`}
+                  className={`flex items-center gap-2 font-bold text-lg transition-colors ${active ? `${activeColor} underline decoration-4 underline-offset-4 decoration-tipzo-green` : inactiveColor}`}
                 >
                   {item.icon} {item.label}
                 </Link>
               );
             })}
-            
+            {/* Notifications bell */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsNotifOpen(prev => !prev)}
+                className="mr-1 p-2 border-2 border-black bg-white hover:bg-gray-100 shadow-neo-sm flex items-center justify-center transition-transform active:translate-y-[2px] active:shadow-none"
+                title="Notifications"
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-black border border-black">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+              {isNotifOpen && (
+                <div className="absolute right-0 mt-2 w-80 z-40">
+                  <NeoCard color="white" className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-black text-sm">Notifications</span>
+                      {unreadCount > 0 && (
+                        <button
+                          className="text-[10px] font-bold underline"
+                          onClick={() => {
+                            setNotifications(prev => {
+                              const next = prev.map(n => ({ ...n, read: true }));
+                              try {
+                                localStorage.setItem('tipzo_notifications', JSON.stringify(next));
+                              } catch {
+                                // ignore
+                              }
+                              return next;
+                            });
+                            try {
+                              // keep history, just mark as read
+                            } catch {
+                              // ignore
+                            }
+                          }}
+                        >
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+                    {notifications.length === 0 ? (
+                      <p className="text-xs text-gray-500 font-medium">No notifications yet.</p>
+                    ) : (
+                      <>
+                        <ul className="space-y-2 max-h-52 overflow-hidden">
+                          {visibleNotifications.map((n) => (
+                            <li
+                              key={n.id}
+                              className={`border-2 border-black bg-white px-2 py-1 text-xs font-medium shadow-neo-sm cursor-pointer ${n.read ? 'opacity-70' : ''}`}
+                              onClick={() => {
+                                setNotifications(prev => {
+                                  const next = prev.map(item =>
+                                    item.id === n.id ? { ...item, read: true } : item
+                                  );
+                                  try {
+                                    localStorage.setItem('tipzo_notifications', JSON.stringify(next));
+                                  } catch {
+                                    // ignore
+                                  }
+                                  return next;
+                                });
+                              }}
+                            >
+                              <div className="flex justify-between gap-2">
+                                <span className={n.type === 'received' ? 'text-green-700' : 'text-blue-700'}>
+                                  {n.message}
+                                </span>
+                                {!n.read && (
+                                  <span className="w-2 h-2 rounded-full bg-red-500 border border-black mt-[2px]" />
+                                )}
+                              </div>
+                              <div className="text-[10px] text-gray-500 mt-0.5">
+                                {new Date(n.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                        {notifications.length > pageSize && (
+                          <div className="flex items-center justify-between mt-2 text-[10px] font-semibold">
+                            <button
+                              className="px-2 py-0.5 border-2 border-black bg-white disabled:opacity-40"
+                              disabled={safePage === 0}
+                              onClick={() => setNotifPage(p => Math.max(0, p - 1))}
+                            >
+                              ↑ Newer
+                            </button>
+                            <span>
+                              Page {safePage + 1} / {totalPages}
+                            </span>
+                            <button
+                              className="px-2 py-0.5 border-2 border-black bg-white disabled:opacity-40"
+                              disabled={safePage >= totalPages - 1}
+                              onClick={() => setNotifPage(p => Math.min(totalPages - 1, p + 1))}
+                            >
+                              ↓ Older
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </NeoCard>
+                </div>
+              )}
+            </div>
+
             <button
               type="button"
               onClick={toggleTheme}
@@ -265,7 +447,7 @@ const Footer: React.FC = () => (
     <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
       <div className="text-center md:text-left">
         <h2 className="text-2xl font-black">TIPZO</h2>
-        <p className="font-medium text-gray-500">© 2024 Tipzo Inc. Powered by Aleo.</p>
+        <p className="font-medium text-gray-500">© 22026 Tipzo Inc. Powered by Aleo.</p>
       </div>
       <div className="flex gap-6 font-bold">
         <a href="#" className="hover:text-tipzo-orange">Twitter</a>

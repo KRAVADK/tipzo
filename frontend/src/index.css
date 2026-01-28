@@ -97,17 +97,21 @@ body.tipzo-dark .border-gray-300 {
   border-color: #6b7280 !important; /* slate-500 */
 }
 
+/* Hero: SUPPORT / CREATORS visible in dark mode (white) */
+body.tipzo-dark .tipzo-hero .tipzo-hero-headline {
+  color: #f8fafc !important;
+}
+
+/* First page: section title WHY TIPZO? white in dark mode */
+body.tipzo-dark .tipzo-page-light-frames > h2 {
+  color: #fff !important;
+}
+
 /* First page: frames/cards with white or light background — black text in dark mode */
 body.tipzo-dark .tipzo-page-light-frames,
-body.tipzo-dark .tipzo-page-light-frames h2,
 body.tipzo-dark .tipzo-page-light-frames h3,
 body.tipzo-dark .tipzo-page-light-frames p {
   color: #0f172a !important;
-}
-
-/* Override: "WHY TIPZO?" heading should be white in dark mode */
-body.tipzo-dark .tipzo-dark-white {
-  color: #ffffff !important;
 }
 
 /* Improve contrast for inputs and form fields in dark mode */
