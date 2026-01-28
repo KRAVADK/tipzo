@@ -69,32 +69,7 @@ body.tipzo-animations-off * {
 body.tipzo-dark {
   background-color: #020617; /* slate-950 */
   background-image: radial-gradient(#1f2937 1px, transparent 1px);
-}
-
-body.tipzo-dark .bg-white {
-  background-color: #020617 !important;
-}
-
-body.tipzo-dark .text-black {
-  color: #f9fafb !important;
-}
-
-body.tipzo-dark .text-gray-600 {
-  color: #e5e7eb !important;
-}
-
-body.tipzo-dark .text-gray-500 {
-  color: #9ca3af !important;
-}
-
-body.tipzo-dark .border-black {
-  border-color: #020617 !important;
-}
-
-body.tipzo-dark .shadow-neo,
-body.tipzo-dark .shadow-neo-sm,
-body.tipzo-dark .shadow-neo-lg {
-  box-shadow: 4px 4px 0px 0px rgba(15,23,42,1) !important;
+  color: #e5e7eb;
 }
 
 body.tipzo-dark nav {
@@ -103,4 +78,48 @@ body.tipzo-dark nav {
 
 body.tipzo-dark footer {
   background-color: #020617 !important;
+}
+
+/* Make neutral grays readable in dark mode (leave explicit text-black as-is so it's dark on light cards) */
+body.tipzo-dark .text-gray-600 {
+  color: #e5e7eb !important;
+}
+
+body.tipzo-dark .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+body.tipzo-dark .border-gray-200 {
+  border-color: #4b5563 !important; /* slate-600 */
+}
+
+body.tipzo-dark .border-gray-300 {
+  border-color: #6b7280 !important; /* slate-500 */
+}
+
+/* First page: frames/cards with white or light background — black text in dark mode */
+body.tipzo-dark .tipzo-page-light-frames,
+body.tipzo-dark .tipzo-page-light-frames h2,
+body.tipzo-dark .tipzo-page-light-frames h3,
+body.tipzo-dark .tipzo-page-light-frames p {
+  color: #0f172a !important;
+}
+
+/* Override: "WHY TIPZO?" heading should be white in dark mode */
+body.tipzo-dark .tipzo-dark-white {
+  color: #ffffff !important;
+}
+
+/* Improve contrast for inputs and form fields in dark mode */
+body.tipzo-dark input,
+body.tipzo-dark textarea,
+body.tipzo-dark select {
+  background-color: #ffffff;
+  color: #020617;
+  border-color: #000000;
+}
+
+body.tipzo-dark input::placeholder,
+body.tipzo-dark textarea::placeholder {
+  color: #6b7280;
 }
