@@ -1,6 +1,9 @@
 // Compact console logging utility
 
-const isDev = import.meta.env.DEV;
+// Vite injects import.meta.env at build time; guard for type safety
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const metaEnv: any = (import.meta as any).env || {};
+const isDev = !!metaEnv.DEV;
 
 // Styles
 const styles = {
