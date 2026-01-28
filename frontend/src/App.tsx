@@ -6,9 +6,9 @@ import { DecryptPermission, WalletAdapterNetwork, WalletName } from "@demox-labs
 import { LayoutGrid, User, History as HistoryIcon, Menu, X, Wallet, LogOut } from 'lucide-react';
 
 import Landing from './views/Landing';
-import Explore from './views/Explore';
 import History from './views/History';
 import Profile from './views/Profile';
+import QuickDonate from './views/QuickDonate';
 import { NeoButton, NeoCard } from './components/NeoComponents';
 import { PROGRAM_ID } from './deployed_program';
 
@@ -93,7 +93,9 @@ const Navbar: React.FC = () => {
   };
 
   const navItems = [
-    { path: '/explore', label: 'Explore', icon: <LayoutGrid size={20} /> },
+    // Explore temporarily disabled from navigation
+    // { path: '/explore', label: 'Explore', icon: <LayoutGrid size={20} /> },
+    { path: '/quick-donate', label: 'Quick Donate', icon: <LayoutGrid size={20} /> },
     { path: '/history', label: 'History', icon: <HistoryIcon size={20} /> },
     { path: '/profile', label: 'Profile', icon: <User size={20} /> },
   ];
@@ -204,8 +206,10 @@ const AppContent: React.FC = () => {
         <Navbar />
         <main className="flex-grow">
           <Routes>
-            <Route path="/" element={<Landing onGetStarted={() => window.location.hash = '#/explore'} />} />
-            <Route path="/explore" element={<Explore />} />
+            <Route path="/" element={<Landing onGetStarted={() => window.location.hash = '#/quick-donate'} />} />
+            {/* Explore route kept for backward compatibility but reuses QuickDonate */}
+            <Route path="/explore" element={<QuickDonate />} />
+            <Route path="/quick-donate" element={<QuickDonate />} />
             <Route path="/history" element={<History />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/profile/:address" element={<Profile />} />
