@@ -64,3 +64,43 @@ body.tipzo-animations-off * {
   animation-iteration-count: 1 !important;
   transition-duration: 0s !important;
 }
+
+/* Dark theme */
+body.tipzo-dark {
+  background-color: #020617; /* slate-950 */
+  background-image: radial-gradient(#1f2937 1px, transparent 1px);
+}
+
+body.tipzo-dark .bg-white {
+  background-color: #020617 !important;
+}
+
+body.tipzo-dark .text-black {
+  color: #f9fafb !important;
+}
+
+body.tipzo-dark .text-gray-600 {
+  color: #e5e7eb !important;
+}
+
+body.tipzo-dark .text-gray-500 {
+  color: #9ca3af !important;
+}
+
+body.tipzo-dark .border-black {
+  border-color: #020617 !important;
+}
+
+body.tipzo-dark .shadow-neo,
+body.tipzo-dark .shadow-neo-sm,
+body.tipzo-dark .shadow-neo-lg {
+  box-shadow: 4px 4px 0px 0px rgba(15,23,42,1) !important;
+}
+
+body.tipzo-dark nav {
+  background-color: #020617 !important;
+}
+
+body.tipzo-dark footer {
+  background-color: #020617 !important;
+}

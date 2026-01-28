@@ -3,7 +3,7 @@ import { HashRouter as Router, Routes, Route, Link, useLocation } from 'react-ro
 import { WalletProvider, useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { LeoWalletAdapter } from "@demox-labs/aleo-wallet-adapter-leo";
 import { DecryptPermission, WalletAdapterNetwork, WalletName } from "@demox-labs/aleo-wallet-adapter-base";
-import { LayoutGrid, User, History as HistoryIcon, Menu, X, Wallet, LogOut } from 'lucide-react';
+import { LayoutGrid, User, History as HistoryIcon, Menu, X, Wallet, LogOut, Moon, Sun } from 'lucide-react';
 
 import Landing from './views/Landing';
 import History from './views/History';
@@ -61,6 +61,7 @@ const WalletModal: React.FC<WalletModalProps> = ({ isOpen, onClose, onConnect, w
 const Navbar: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   
   // Wallet hooks
   const { publicKey, disconnect, select, wallets } = useWallet();
@@ -78,6 +79,39 @@ const Navbar: React.FC = () => {
     };
   }, []);
 
+  // Load and apply theme on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('tipzo_theme');
+      const initial: 'light' | 'dark' = stored === 'dark' ? 'dark' : 'light';
+      setTheme(initial);
+      if (initial === 'dark') {
+        document.body.classList.add('tipzo-dark');
+      } else {
+        document.body.classList.remove('tipzo-dark');
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    setTheme(prev => {
+      const next = prev === 'light' ? 'dark' : 'light';
+      if (next === 'dark') {
+        document.body.classList.add('tipzo-dark');
+      } else {
+        document.body.classList.remove('tipzo-dark');
+      }
+      try {
+        localStorage.setItem('tipzo_theme', next);
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
   const handleConnect = async (adapterName: string) => {
     const adapter = wallets.find(w => w.adapter.name === adapterName)?.adapter;
     if (adapter) {
@@ -93,8 +127,7 @@ const Navbar: React.FC = () => {
   };
 
   const navItems = [
-    // Explore temporarily disabled from navigation
-    // { path: '/explore', label: 'Explore', icon: <LayoutGrid size={20} /> },
+    { path: '/explore', label: 'Explore', icon: <LayoutGrid size={20} />, disabled: true },
     { path: '/quick-donate', label: 'Quick Donate', icon: <LayoutGrid size={20} /> },
     { path: '/history', label: 'History', icon: <HistoryIcon size={20} /> },
     { path: '/profile', label: 'Profile', icon: <User size={20} /> },
@@ -117,16 +150,38 @@ const Navbar: React.FC = () => {
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-8">
-            {navItems.map((item) => (
-              <Link 
-                key={item.path} 
-                to={item.path}
-                className={`flex items-center gap-2 font-bold text-lg transition-colors ${isActive(item.path) ? 'text-black underline decoration-4 underline-offset-4 decoration-tipzo-green' : 'text-gray-500 hover:text-black'}`}
-              >
-                {item.icon} {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isDisabled = (item as any).disabled;
+              if (isDisabled) {
+                return (
+                  <span
+                    key={item.path}
+                    className="flex items-center gap-2 font-bold text-lg text-gray-400 cursor-not-allowed opacity-60"
+                    title="Temporarily unavailable"
+                  >
+                    {item.icon} {item.label}
+                  </span>
+                );
+              }
+              return (
+                <Link 
+                  key={item.path} 
+                  to={item.path}
+                  className={`flex items-center gap-2 font-bold text-lg transition-colors ${isActive(item.path) ? 'text-black underline decoration-4 underline-offset-4 decoration-tipzo-green' : 'text-gray-500 hover:text-black'}`}
+                >
+                  {item.icon} {item.label}
+                </Link>
+              );
+            })}
             
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="mr-2 p-2 border-2 border-black bg-white hover:bg-gray-100 shadow-neo-sm flex items-center justify-center transition-transform active:translate-y-[2px] active:shadow-none"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
             {publicKey ? (
                 <div className="flex items-center gap-2">
                     <NeoButton size="sm" variant="secondary" className="flex items-center gap-2" onClick={() => {navigator.clipboard.writeText(publicKey); alert('Address copied!');}}>
@@ -149,18 +204,40 @@ const Navbar: React.FC = () => {
         </div>
 
         {/* Mobile Nav */}
-        {isOpen && (
+            {isOpen && (
           <div className="md:hidden absolute top-full left-0 w-full bg-[#fafaf9] border-b-2 border-black p-6 flex flex-col gap-4 shadow-neo">
-            {navItems.map((item) => (
-              <Link 
-                key={item.path} 
-                to={item.path}
-                onClick={() => setIsOpen(false)}
-                className="flex items-center gap-4 text-2xl font-bold p-2 hover:bg-gray-100 border-2 border-transparent hover:border-black"
-              >
-                {item.icon} {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isDisabled = (item as any).disabled;
+              if (isDisabled) {
+                return (
+                  <div
+                    key={item.path}
+                    className="flex items-center gap-4 text-2xl font-bold p-2 border-2 border-dashed border-gray-400 text-gray-400 opacity-60 cursor-not-allowed"
+                  >
+                    {item.icon} {item.label}
+                    <span className="ml-2 text-xs font-semibold uppercase tracking-wide">Soon</span>
+                  </div>
+                );
+              }
+              return (
+                <Link 
+                  key={item.path} 
+                  to={item.path}
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-4 text-2xl font-bold p-2 hover:bg-gray-100 border-2 border-transparent hover:border-black"
+                >
+                  {item.icon} {item.label}
+                </Link>
+              );
+            })}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="flex items-center gap-2 px-3 py-1 border-2 border-black bg-white hover:bg-gray-100 shadow-neo-sm text-sm font-semibold"
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+              <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+            </button>
             {publicKey ? (
                 <div className="flex flex-col gap-2 mt-4">
                     <div className="font-mono p-2 border-2 border-black bg-white text-center text-sm">{publicKey}</div>
