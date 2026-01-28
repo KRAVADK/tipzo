@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
-import { stringToField } from '../utils/aleo';
+import { stringToField, formatAddress } from '../utils/aleo';
 import { getProfileFromChain, getAllRegisteredProfiles, getKnownProfileAddresses } from '../utils/explorerAPI';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 import { logger } from '../utils/logger';
@@ -108,21 +108,20 @@ const QuickDonate: React.FC = () => {
         const matchingProfiles: Creator[] = [];
 
         if (trimmedSearch.startsWith("aleo1")) {
-          // Direct address search
+          // Direct address search – allow donation even if profile does not exist on-chain
           const profile = await getProfileFromChain(trimmedSearch);
-          if (profile) {
-            const creator: Creator = {
-              id: trimmedSearch,
-              name: profile.name && profile.name.trim() ? profile.name : "Anonymous",
-              handle: trimmedSearch.slice(0, 10) + "...",
-              category: 'User' as const,
-              avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${trimmedSearch}`,
-              bio: profile.bio || "",
-              verified: false,
-              color: 'white' as const
-            };
-            matchingProfiles.push(creator);
-          }
+
+          const creator: Creator = {
+            id: trimmedSearch,
+            name: profile && profile.name && profile.name.trim() ? profile.name : "Anonymous",
+            handle: trimmedSearch.slice(0, 10) + "...",
+            category: 'User' as const,
+            avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${trimmedSearch}`,
+            bio: profile?.bio || "",
+            verified: false,
+            color: 'white' as const
+          };
+          matchingProfiles.push(creator);
         } else {
           // Search by nickname / bio
           const allProfileAddresses = await getAllRegisteredProfiles();
@@ -211,11 +210,17 @@ const QuickDonate: React.FC = () => {
         throw new Error(`Invalid creator ID: ${creator.id}`);
       }
 
-      logger.debug("[QuickDonate] Transferring tokens...");
-      const transferTransaction = {
+      const adapterAny = wallet.adapter as any;
+      const messageField = stringToField(donationMessage || "");
+      const timestamp = Math.floor(Date.now() / 1000);
+
+      // Single transaction with two transitions for reliability:
+      // 1) credits.aleo::transfer_public
+      // 2) donatu_appv5.aleo::send_donation(sender, recipient, amount, message, timestamp)
+      const donationTransaction = {
         address: String(publicKey),
         chainId: WalletAdapterNetwork.TestnetBeta,
-        fee: 50000,
+        fee: 50000, // ~0.05 ALEO combined fee (as previously worked stably)
         transitions: [
           {
             program: "credits.aleo",
@@ -224,39 +229,16 @@ const QuickDonate: React.FC = () => {
               String(creator.id),
               String(amountMicro) + "u64"
             ]
-          }
-        ]
-      };
-
-      const adapterAny = wallet.adapter as any;
-      const transferTxId = await requestTransactionWithRetry(adapterAny, transferTransaction, {
-        timeout: 30000,
-        maxRetries: 3
-      });
-      if (!transferTxId) {
-        throw new Error("Token transfer was rejected or failed");
-      }
-
-      logger.debug("[QuickDonate] Transfer confirmed:", transferTxId);
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      logger.debug("[QuickDonate] Creating donation record...");
-      const messageField = stringToField(donationMessage || "");
-      const timestamp = Math.floor(Date.now() / 1000);
-
-      const donationTransaction = {
-        address: String(publicKey),
-        chainId: WalletAdapterNetwork.TestnetBeta,
-        fee: 50000,
-        transitions: [
+          },
           {
             program: String(PROGRAM_ID),
             functionName: "send_donation",
             inputs: [
-              String(creator.id),
-              String(amountMicro) + "u64",
-              String(messageField),
-              String(timestamp) + "u64"
+              String(publicKey),                 // sender (public)
+              String(creator.id),                // recipient (public)
+              String(amountMicro) + "u64",       // amount (private)
+              String(messageField),              // message (private)
+              String(timestamp) + "u64"          // timestamp (public)
             ]
           }
         ]
@@ -267,13 +249,22 @@ const QuickDonate: React.FC = () => {
         maxRetries: 3
       });
       if (!donationTxId) {
-        console.warn("[QuickDonate] Donation record creation failed, but tokens were transferred");
-        alert(`Tokens transferred! Transaction: ${transferTxId}\nNote: Donation record creation failed.`);
+        console.warn("[QuickDonate] Donation transaction failed");
+        alert("Donation transaction failed or was rejected.");
         return;
       }
 
       logger.donation.sent(donationTxId);
-      alert(`Donation sent successfully!\n\nFunction: send_donation\nTransfer: ${transferTxId.slice(0, 8)}...\nRecord: ${donationTxId.slice(0, 8)}...`);
+      // Fire global notification for navbar
+      window.dispatchEvent(new CustomEvent('tipzo-notification', {
+        detail: {
+          id: donationTxId,
+          type: 'sent',
+          message: `Sent ${amountNum} ALEO to ${formatAddress(creator.id)}`,
+          timestamp: Date.now(),
+        }
+      }));
+      alert(`Donation sent successfully!\n\nTransaction: ${donationTxId.slice(0, 8)}...\nIncludes: transfer_public + send_donation`);
       setDonationMessage("");
     } catch (e) {
       console.error("[QuickDonate] Donation failed:", e);
@@ -289,7 +280,9 @@ const QuickDonate: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-4">
         <div className="space-y-2">
-          <h1 className="text-5xl font-black mb-1">QUICK DONATE</h1>
+          <h1 className="text-5xl font-black mb-1 inline-block bg-white px-4 py-1 border-2 border-black shadow-neo-sm">
+            QUICK DONATE
+          </h1>
           <p className="text-xl font-medium text-gray-600">
             Find a creator and send a tip instantly. Fully private sender, public profile.
           </p>
@@ -313,12 +306,15 @@ const QuickDonate: React.FC = () => {
       {/* Recent recipients strip */}
       {recentRecipients.length > 0 && (
         <div className="mb-6 flex flex-wrap items-center gap-2">
-          <span className="text-sm font-bold text-gray-700 mr-1">Recent tips:</span>
+          <span className="text-sm font-bold text-black mr-1">Recent tips:</span>
           {recentRecipients.map((item) => (
             <button
               key={item.address}
               onClick={() => {
-                setSearchTerm(item.name || item.address);
+                // Always search by full Aleo address so that
+                // direct-address search logic works and donation
+                // is possible even without an on-chain profile.
+                setSearchTerm(item.address);
               }}
               className="text-xs md:text-sm px-3 py-1 border-2 border-black bg-white hover:bg-tipzo-yellow transition-colors shadow-neo-sm active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
             >
@@ -484,17 +480,19 @@ const QuickDonate: React.FC = () => {
 
       {creators.length === 0 && !loading && (
         <div className="text-center py-20">
-          <h3 className="text-2xl font-bold text-gray-400 mb-2">
-            {searchTerm ? (searchError || "No profile found for this query.") : "Start by searching for an Aleo address or nickname."}
-          </h3>
-          {searchError && (
-            <p className="text-sm text-gray-500 mt-2">{searchError}</p>
-          )}
-          {!searchTerm && (
-            <p className="text-sm text-gray-500 mt-4">
-              Enter an Aleo address (aleo1...) or a profile name to quickly send a donation.
-            </p>
-          )}
+          <div className="inline-block bg-white px-6 py-4 border-2 border-black shadow-neo-sm">
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">
+              {searchTerm ? (searchError || "No profile found for this query.") : "Start by searching for an Aleo address or nickname."}
+            </h3>
+            {searchError && (
+              <p className="text-sm text-gray-600 mt-2">{searchError}</p>
+            )}
+            {!searchTerm && (
+              <p className="text-sm text-gray-800 mt-4">
+                Enter an Aleo address (aleo1...) or a profile name to quickly send a donation.
+              </p>
+            )}
+          </div>
         </div>
       )}
 

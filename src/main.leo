@@ -1,10 +1,11 @@
-program tipzo_app_v7.aleo {
-    // This is the constructor for the program.
-    // It is called when the program is deployed.
-    // Version 7: Public profile registry - profiles are automatically registered and discoverable
-    // Both create_profile and update_profile ensure profiles are in the registry
-    // Using @admin to allow future upgrades (admin is the deployer address)
-    @admin(address = "aleo1djs0erk6tcruhjkgcfut8z4cucx9ctr4x27huk9cx3phlkmwpuqs6qahh3")
+program donatu_appv5.aleo {
+    // Version 5: based on donatu_appv4.aleo
+    // - Profiles: simple mapping profiles (no registry)
+    // - Donations: private records + public indices for history
+    // - Additionally: global_donation_index for easy selection of full history
+
+    // Constructor
+    @noupgrade
     async constructor() {}
 
     // Profile information struct
@@ -13,8 +14,7 @@ program tipzo_app_v7.aleo {
         bio: field,
     }
 
-    // Record for the recipient (Received Donation) - PRIVATE
-    // Only the recipient can see: sender address, amount, message
+    // Record for the recipient (Received Donation)
     record RecipientDonation {
         owner: address,
         sender: address,
@@ -23,8 +23,7 @@ program tipzo_app_v7.aleo {
         timestamp: u64,
     }
 
-    // Record for the sender (Sent Donation receipt) - PRIVATE
-    // Only the sender can see: recipient address, amount, message
+    // Record for the sender (Sent Donation receipt)
     record SentDonation {
         owner: address,
         recipient: address,
@@ -32,60 +31,39 @@ program tipzo_app_v7.aleo {
         message: field,
         timestamp: u64,
     }
-
-    // Profiles mapping - PUBLIC and UNENCRYPTED
-    // All profile data (name, bio) is stored publicly on blockchain
-    // Anyone can read any profile without encryption or restrictions
-    mapping profiles: address => ProfileInfo;
     
-    // Public registry of active profiles - indexed list for discovery
-    mapping active_profiles: u64 => address;
-    
-    // Counter for total number of registered profiles
-    mapping profile_count: u64 => u64;
-    
-    // Track which addresses are already registered (to avoid duplicates)
-    mapping is_registered: address => bool;
-
-    // Send donation - FULLY PRIVATE transition
-    // No public parameters except timestamp (for ordering)
-    // No finalize function - no public mappings
-    // All donation data is stored ONLY in private records
-    transition send_donation(
-        private recipient: address,
-        private amount: u64,
-        private message: field,
-        public timestamp: u64
-    ) -> (RecipientDonation, SentDonation) {
-        let sender: address = self.caller;
-        
-        // Create recipient donation record (owned by recipient)
-        // Only recipient can decrypt and see: sender, amount, message
-        let recipient_donation: RecipientDonation = RecipientDonation {
-            owner: recipient,
-            sender: sender,
-            amount: amount,
-            message: message,
-            timestamp: timestamp,
-        };
-
-        // Create sender donation record (owned by sender)
-        // Only sender can decrypt and see: recipient, amount, message
-        let sender_donation: SentDonation = SentDonation {
-            owner: sender,
-            recipient: recipient,
-            amount: amount,
-            message: message,
-            timestamp: timestamp,
-        };
-
-        // Return both records - NO FINALIZE, NO PUBLIC MAPPINGS
-        // All donation data is private and encrypted
-        return (recipient_donation, sender_donation);
+    // Donation metadata for indexing (public)
+    struct DonationMeta {
+        sender: address,
+        recipient: address,
+        amount: u64,
+        message_hash: field,
+        timestamp: u64,
     }
 
+    // Profiles mapping
+    mapping profiles: address => ProfileInfo;
+
+    // Count of donations per recipient
+    mapping donation_count: address => u64;
+
+    // Donation index: key = hash(recipient, index) => DonationMeta
+    mapping donation_index: field => DonationMeta;
+
+    // Count of sent donations per sender
+    mapping sent_donation_count: address => u64;
+
+    // Sent donation index: key = hash(sender, index) => DonationMeta
+    mapping sent_donation_index: field => DonationMeta;
+
+    // Global count of all donations (for easy history scanning)
+    // key = 0u64 => total number of donations
+    mapping global_donation_count: u64 => u64;
+
+    // Global donation index: key = 0,1,2,... => DonationMeta
+    mapping global_donation_index: u64 => DonationMeta;
+
     // Create or update profile
-    // Automatically registers profile in public registry if it's new
     async transition create_profile(public name: field, public bio: field) -> Future {
         return finalize_create_profile(self.caller, name, bio);
     }
@@ -96,30 +74,9 @@ program tipzo_app_v7.aleo {
             bio: bio
         };
         Mapping::set(profiles, user, info);
-        
-        // Check if profile is already registered
-        // Use get_or_use to safely get value (returns false if key doesn't exist)
-        let registered: bool = Mapping::get_or_use(is_registered, user, false);
-        
-        // Only register in public list if not already registered
-        if (!registered) {
-            // Get current profile count (use 0u64 as default if not initialized)
-            let count_key: u64 = 0u64;
-            let current_count: u64 = Mapping::get_or_use(profile_count, count_key, 0u64);
-            
-            // Add user to active_profiles at index = current_count
-            Mapping::set(active_profiles, current_count, user);
-            
-            // Mark as registered
-            Mapping::set(is_registered, user, true);
-            
-            // Increment profile count
-            Mapping::set(profile_count, count_key, current_count + 1u64);
-        }
     }
 
     // Update profile
-    // Updates existing profile and ensures it's in registry (adds if missing)
     async transition update_profile(public name: field, public bio: field) -> Future {
         return finalize_update_profile(self.caller, name, bio);
     }
@@ -130,57 +87,94 @@ program tipzo_app_v7.aleo {
             bio: bio
         };
         Mapping::set(profiles, user, info);
-        
-        // Check if profile is registered - if not, add it to registry
-        // This ensures profiles created in older versions or missed somehow are still discoverable
-        // Use get_or_use to safely get value (returns false if key doesn't exist)
-        let registered: bool = Mapping::get_or_use(is_registered, user, false);
-        
-        if (!registered) {
-            // Get current profile count (use 0u64 as default if not initialized)
-            let count_key: u64 = 0u64;
-            let current_count: u64 = Mapping::get_or_use(profile_count, count_key, 0u64);
-            
-            // Add user to active_profiles at index = current_count
-            Mapping::set(active_profiles, current_count, user);
-            
-            // Mark as registered
-            Mapping::set(is_registered, user, true);
-            
-            // Increment profile count
-            Mapping::set(profile_count, count_key, current_count + 1u64);
-        }
     }
 
-    // View function to read profile from mapping (public, async for mapping access)
-    async transition get_profile(public user_address: address) -> Future {
-        return finalize_get_profile(user_address);
+    // Send donation with encryption + public metadata indexing
+    async transition send_donation(
+        public sender: address,
+        public recipient: address,
+        private amount: u64,
+        private message: field,
+        public timestamp: u64
+    ) -> (RecipientDonation, SentDonation, Future) {
+        // Only the declared sender can call this transition
+        assert_eq(self.caller, sender);
+        
+        // Create recipient donation record (owned by recipient)
+        let recipient_donation: RecipientDonation = RecipientDonation {
+            owner: recipient,
+            sender: sender,
+            amount: amount,
+            message: message,
+            timestamp: timestamp,
+        };
+
+        // Create sender donation record (owned by sender)
+        let sender_donation: SentDonation = SentDonation {
+            owner: sender,
+            recipient: recipient,
+            amount: amount,
+            message: message,
+            timestamp: timestamp,
+        };
+
+        // Hash message for indexing (privacy-preserving)
+        let message_hash: field = BHP256::hash_to_field(message);
+        
+        // Pass metadata to finalize for indexing
+        return (recipient_donation, sender_donation, finalize_send_donation(recipient, sender, amount, message_hash, timestamp));
     }
 
-    async function finalize_get_profile(user_address: address) {
-        let profile: ProfileInfo = Mapping::get(profiles, user_address);
-        // Note: In Leo, we can't directly return from finalize, but the profile is accessible
-        // The frontend will need to read it from the transaction output
-    }
-    
-    // View function to get total number of registered profiles
-    async transition get_profile_count() -> Future {
-        return finalize_get_profile_count();
-    }
-    
-    async function finalize_get_profile_count() {
+    async function finalize_send_donation(
+        recipient: address,
+        sender: address,
+        amount: u64,
+        message_hash: field,
+        timestamp: u64
+    ) {
+        // Index for recipient (received donations)
+        let recipient_count: u64 = Mapping::get_or_use(donation_count, recipient, 0u64);
+        let recipient_field: field = BHP256::hash_to_field(recipient);
+        let recipient_index_key: field = recipient_field + (recipient_count as field);
+        
+        let recipient_meta: DonationMeta = DonationMeta {
+            sender: sender,
+            recipient: recipient,
+            amount: amount,
+            message_hash: message_hash,
+            timestamp: timestamp,
+        };
+        Mapping::set(donation_index, recipient_index_key, recipient_meta);
+        Mapping::set(donation_count, recipient, recipient_count + 1u64);
+
+        // Index for sender (sent donations)
+        let sender_count: u64 = Mapping::get_or_use(sent_donation_count, sender, 0u64);
+        let sender_field: field = BHP256::hash_to_field(sender);
+        let sender_index_key: field = sender_field + (sender_count as field);
+        
+        let sender_meta: DonationMeta = DonationMeta {
+            sender: sender,
+            recipient: recipient,
+            amount: amount,
+            message_hash: message_hash,
+            timestamp: timestamp,
+        };
+        Mapping::set(sent_donation_index, sender_index_key, sender_meta);
+        Mapping::set(sent_donation_count, sender, sender_count + 1u64);
+
+        // Global index for all donations (for easy scanning in frontend)
         let count_key: u64 = 0u64;
-        let count: u64 = Mapping::get_or_use(profile_count, count_key, 0u64);
-        // Count is accessible via transaction output
-    }
-    
-    // View function to get profile address by index
-    async transition get_profile_at_index(public index: u64) -> Future {
-        return finalize_get_profile_at_index(index);
-    }
-    
-    async function finalize_get_profile_at_index(index: u64) {
-        let profile_address: address = Mapping::get(active_profiles, index);
-        // Address is accessible via transaction output
+        let global_count: u64 = Mapping::get_or_use(global_donation_count, count_key, 0u64);
+
+        let global_meta: DonationMeta = DonationMeta {
+            sender: sender,
+            recipient: recipient,
+            amount: amount,
+            message_hash: message_hash,
+            timestamp: timestamp,
+        };
+
+        Mapping::set(global_donation_index, global_count, global_meta);
+        Mapping::set(global_donation_count, count_key, global_count + 1u64);
     }
 }
