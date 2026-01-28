@@ -306,7 +306,9 @@ const QuickDonate: React.FC = () => {
       {/* Recent recipients strip */}
       {recentRecipients.length > 0 && (
         <div className="mb-6 flex flex-wrap items-center gap-2">
-          <span className="text-sm font-bold text-black mr-1">Recent tips:</span>
+          <span className="tipzo-recent-tips-title text-sm font-bold mr-1 border-2 border-black bg-white px-2 py-1 shadow-neo-sm text-black">
+            Recent tips:
+          </span>
           {recentRecipients.map((item) => (
             <button
               key={item.address}
