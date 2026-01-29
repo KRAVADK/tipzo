@@ -103,42 +103,87 @@ Only the owner’s wallet (e.g. Leo Wallet) can decrypt these records. The `mess
 
 ---
 
-## Installing and Configuring the Frontend
+## How to Install and Configure the Frontend (So Everything Works)
+
+Follow these steps to run the TipZo frontend locally and have it work with your deployed contract and Leo Wallet.
 
 ### Requirements
 
-- Node.js 18+
-- npm or yarn
-- Leo Wallet extension (or compatible wallet) for signing and record access
+- **Node.js 18+** and npm (or yarn)
+- **Leo Wallet** browser extension ([install](https://www.leowallet.io/)) — used for signing transactions and decrypting records
+- The contract **deployed** on Aleo testnet (see [Program Name and Deploy](#program-name-and-deploy))
 
-### 1. Install dependencies
+No `.env` file is required; API URLs and network are set in code.
+
+---
+
+### Step 1 — Clone and go to frontend
 
 ```bash
-cd frontend
+git clone https://github.com/barbos001/tipzo.git
+cd tipzo/frontend
+```
+
+(Or `cd tipzo/frontend` if you already have the repo.)
+
+---
+
+### Step 2 — Install dependencies
+
+```bash
 npm install
 ```
 
-### 2. Program ID (contract)
+If you see errors, try `npm ci` or ensure Node.js is 18+ (`node -v`).
 
-Open `frontend/src/deployed_program.ts` and set the deployed program id:
+---
+
+### Step 3 — Set the program ID (required)
+
+The frontend must use the **same program id** as the deployed contract.
+
+1. Open **`frontend/src/deployed_program.ts`**.
+2. Set `PROGRAM_ID` to your deployed program id:
 
 ```typescript
 export const PROGRAM_ID = "donatu_appv5.aleo";
 ```
 
-If you deployed under a different name (e.g. `donatu_app.aleo`), use that. This value is used for contract calls and API requests (mappings, history).
+If you deployed with another name (e.g. `donatu_app.aleo`), use that exact string. This value is used for:
+- Contract calls (create_profile, update_profile, send_donation)
+- Provable API requests (mappings, global donation history)
 
-### 3. Public profiles registry (optional)
+Wrong or outdated `PROGRAM_ID` will cause "program not found", empty profiles, or failed transactions.
 
-The frontend loads the list of profile addresses from:
+---
 
-- Local file after build: `/public-profiles.json`
-- GitHub: URL in `frontend/src/utils/explorerAPI.ts` (`PUBLIC_PROFILES_REGISTRY_URL`)
-- Fallback (e.g. Netlify): `PUBLIC_PROFILES_REGISTRY_FALLBACK`
+### Step 4 — Run the app
 
-To run locally or with your own list:
+```bash
+npm run dev
+```
 
-- Add `frontend/public/public-profiles.json` with an array of Aleo addresses, e.g.:
+The app will be at **`http://localhost:5173`** (or the port Vite prints).
+
+---
+
+### Step 5 — Connect wallet and network
+
+1. Install **Leo Wallet** and create/import a testnet account.
+2. In the app, click **Connect Wallet** and approve the connection.
+3. When connecting, allow **OnChainHistory** and the program id so the app can request records for donation history.
+4. Ensure the wallet is on **Testnet** (same network as the deployed contract). Wrong network will cause failed transactions and empty data.
+
+---
+
+### Optional — Public profiles list (Explore page)
+
+The **Explore** page shows profiles. It loads addresses from:
+
+1. **`frontend/public/public-profiles.json`** — local file (array of Aleo addresses).
+2. **GitHub / Netlify** — URLs in `frontend/src/utils/explorerAPI.ts` (`PUBLIC_PROFILES_REGISTRY_URL`, `PUBLIC_PROFILES_REGISTRY_FALLBACK`).
+
+To use a custom list locally, create `frontend/public/public-profiles.json`:
 
 ```json
 [
@@ -147,40 +192,30 @@ To run locally or with your own list:
 ]
 ```
 
-If the file is missing, the app can still discover profiles via Provable API (scanning `create_profile` / `update_profile` calls).
+If the file is missing, the app can still discover some profiles via the Provable API. To change the remote URLs, edit `explorerAPI.ts`.
 
-### 4. Explorer API
+---
 
-The frontend uses Provable Explorer API:
-
-- Mappings: `https://api.explorer.provable.com/v1/testnet/program/<PROGRAM_ID>/mapping/...`
-- Base URLs are in `frontend/src/utils/explorerAPI.ts` (`MAPPING_URL`, `PROVABLE_API_V1_BASE`, `PROVABLE_API_V2_BASE`).
-
-If your contract is deployed on **testnet** Provable, no changes are needed. For mainnet, update `testnet` in those URLs and in the wallet network.
-
-### 5. Run
-
-```bash
-cd frontend
-npm run dev
-```
-
-App is available at `http://localhost:5173` by default.
-
-### 6. Production build
+### Production build
 
 ```bash
 npm run build
 ```
 
-Output goes to `frontend/dist`. For Vercel/Netlify, set the root to `frontend` and build command to `npm run build` (project already has `vercel.json` and `netlify.toml`).
+Output is in **`frontend/dist`**. Deploy that folder to any static host. For **Vercel** or **Netlify**, use project root `frontend`, build command `npm run build` (see existing `vercel.json` and `netlify.toml`).
 
-### Checklist so everything works
+---
 
-1. **PROGRAM_ID** in `deployed_program.ts` matches the deployed contract.
-2. **Leo Wallet** is installed and connected to **Testnet** (or the network where the contract is deployed).
-3. If needed, update profile registry URLs in `explorerAPI.ts` and add/update `public/public-profiles.json`.
-4. The contract is actually deployed on the chosen network (e.g. Provable testnet) so mapping and global donation history requests return data.
+### Checklist — everything works when:
+
+| Check | What to do |
+|-------|------------|
+| **PROGRAM_ID** | Matches the deployed program id in `frontend/src/deployed_program.ts`. |
+| **Leo Wallet** | Installed, connected, and set to **Testnet**. |
+| **Contract** | Deployed on testnet (e.g. Provable) so mappings and history API return data. |
+| **Explore page** | Optional: add `frontend/public/public-profiles.json` or rely on API discovery. |
+
+If profiles or history are empty, verify `PROGRAM_ID` and that the contract is deployed on the same network as the wallet. If transactions fail, check wallet network and balance.
 
 ---
 
