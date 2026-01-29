@@ -447,7 +447,7 @@ const Footer: React.FC = () => (
     <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
       <div className="text-center md:text-left">
         <h2 className="text-2xl font-black">TIPZO</h2>
-        <p className="font-medium text-gray-500">© 22026 Tipzo Inc. Powered by Aleo.</p>
+        <p className="font-medium text-gray-500">© 2026 Tipzo Inc. Powered by Aleo.</p>
       </div>
       <div className="flex gap-6 font-bold">
         <a href="#" className="hover:text-tipzo-orange">Twitter</a>
