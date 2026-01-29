@@ -3,10 +3,6 @@ import { useState, useCallback } from "react";
 import { requestRecordsWithRetry, decryptWithRetry } from "../utils/walletUtils";
 import { logger } from "../utils/logger";
 
-// Cache to remember if requestRecordPlaintexts is supported by the current wallet
-// so we don't keep spamming INVALID_PARAMS errors on every load.
-let requestPlaintextsSupported: boolean | null = null;
-
 export interface RecordDonation {
     owner: string;
     sender?: string; // Only in RecipientDonation
