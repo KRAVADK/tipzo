@@ -5,6 +5,35 @@
 const metaEnv: any = (import.meta as any).env || {};
 const isDev = !!metaEnv.DEV;
 
+// Runtime flag for extra debug logs, controlled via app settings in Profile page.
+// Stored in localStorage as { enableDebugLogs: boolean } under key "tipzo_app_settings".
+let cachedDebugFlag: boolean | null = null;
+
+const isDebugEnabled = (): boolean => {
+  if (!isDev) return false;
+
+  try {
+    if (cachedDebugFlag === null) {
+      const raw = localStorage.getItem('tipzo_app_settings');
+      if (!raw) {
+        cachedDebugFlag = false;
+      } else {
+        const parsed = JSON.parse(raw);
+        cachedDebugFlag = !!parsed.enableDebugLogs;
+      }
+    }
+  } catch {
+    cachedDebugFlag = false;
+  }
+
+  return !!cachedDebugFlag;
+};
+
+// Helper to force-refresh debug flag when settings change
+export const _refreshLoggerSettings = () => {
+  cachedDebugFlag = null;
+};
+
 // Styles
 const styles = {
   success: 'color: #00f0ff; font-weight: bold;',
@@ -48,12 +77,12 @@ export const logger = {
   error: (operation: string, error: any) => 
     console.error(`%c⚠️ [Error] ${operation}:`, styles.error, error),
   
-  // Development only
+  // Development-only verbose logs (guarded by app "debug logs" setting)
   debug: (...args: any[]) => {
-    if (isDev) console.log(...args);
+    if (isDebugEnabled()) console.log(...args);
   },
   
   warn: (...args: any[]) => {
-    if (isDev) console.warn(...args);
+    if (isDebugEnabled()) console.warn(...args);
   }
 };

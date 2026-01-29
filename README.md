@@ -1,145 +1,227 @@
-# TipZo - Private Donations on Aleo
+# TipZo — Private Donations on Aleo
 
-A fully-featured decentralized application for private donations on the Aleo blockchain (testnet) using Leo smart contracts. TipZo leverages zero-knowledge proofs to ensure complete privacy for all donation transactions.
+Decentralized app for private donations on Aleo (testnet). Uses a Leo smart contract and zero-knowledge to keep donation amounts and message text private.
 
-## Features
+---
 
-- 🔒 **Fully Encrypted Donations** - Uses Aleo's zero-knowledge proofs for complete privacy
-- 👤 **Profile System** - Create and update profiles with nickname and bio
-- 🔍 **User Search** - Search users by address or nickname
-- 💰 **Donations** - Send donations through profiles or quick donation popup
-- 📜 **Transaction History** - View sent and received donations
-- 🎨 **Modern Design** - Dark theme with glassmorphism effects and gradients
+## Program Name and Deploy
 
-## How It Works
+- **Program name:** `donatu_appv5.aleo`
+- **Contract file:** `src/main.leo`
+- **Metadata:** `program.json` (program: `donatu_appv5.aleo`)
 
-TipZo is built on Aleo's privacy-first blockchain architecture:
+### Deploy Commands
 
-1. **Private Records**: All donation data (amount, message, sender/recipient) is stored in encrypted private records that only the owner can decrypt
-2. **Zero-Knowledge Proofs**: Transactions are verified without revealing sensitive information
-3. **Public Profiles**: Only profile information (nickname, bio) is stored publicly for discoverability
-4. **Wallet Integration**: Seamless integration with Leo Wallet and Puzzle Wallet for transaction signing
+**Before deploy:** install [Leo CLI](https://developer.aleo.org/getting_started/installation) and ensure `program.json` and a built contract exist in the project root.
 
-### Smart Contract Architecture
+```bash
+# Build
+leo build
 
-The Leo smart contract (`src/main.leo`) implements:
+# Deploy to testnet (Provable)
+leo deploy --private-key <YOUR_PRIVATE_KEY> --network testnet --endpoint https://api.explorer.provable.com/v1 --broadcast --yes
+```
 
-- **Profile Management**: Public mapping for user profiles (name, bio)
-- **Private Donations**: Two private records created per donation:
-  - `RecipientDonation`: Owned by recipient, contains sender address, amount, message
-  - `SentDonation`: Owned by sender, contains recipient address, amount, message
-- **No Public Mappings**: Donation data is never stored in public mappings, ensuring complete privacy
+**PowerShell (Windows):** use `deploy.ps1` — set `$PRIVATE_KEY` to your key and run:
 
-## Technologies
+```powershell
+.\deploy.ps1
+```
 
-- **Frontend**: React 18 + TypeScript + Vite
-- **Blockchain**: Aleo Testnet
-- **Smart Contracts**: Leo programming language
-- **Wallet Integration**: Leo Wallet & Puzzle Wallet adapters
-- **Styling**: CSS with glassmorphism effects
-- **Routing**: React Router
+**Bash (Linux/macOS):** use `deploy.sh`:
 
-## Installation
+```bash
+chmod +x deploy.sh
+# Edit PRIVATE_KEY in the file
+./deploy.sh
+```
 
-### Prerequisites
+After deploy, update `frontend/src/deployed_program.ts`: `PROGRAM_ID` must match the deployed program id (e.g. `donatu_appv5.aleo` or a new name if you changed it).
 
-- Node.js 18+ and npm
-- Leo CLI ([Installation Guide](https://developer.aleo.org/getting_started/installation))
-- Leo Wallet browser extension
+---
 
-### Frontend Setup
+## Smart Contract: Main Functions and Logic
+
+The `donatu_appv5.aleo` contract provides:
+
+1. **Profiles** — public storage of name and bio per address.
+2. **Donations** — creation of **private records** for recipient and sender plus **public indices** for history (no message text on-chain).
+
+### Transitions
+
+| Function | Description |
+|----------|-------------|
+| `create_profile(name, bio)` | Create profile. Parameters are public. Writes to mapping `profiles[caller]`. |
+| `update_profile(name, bio)` | Update profile for the same user. Same public `name`, `bio`. |
+| `send_donation(sender, recipient, amount, message, timestamp)` | Send donation. `sender` and `recipient` are public; `amount` and `message` are **private**. Only `sender` may call (`assert_eq(self.caller, sender)`). |
+
+### What Happens on Donation
+
+1. Two **private records** are created:
+   - **RecipientDonation** — owner `recipient`: sender, amount, message, timestamp.
+   - **SentDonation** — owner `sender`: recipient, amount, message, timestamp.
+2. Message text is **not** stored in public state: `message_hash = BHP256::hash_to_field(message)` is computed.
+3. In **finalize**, public mappings are updated:
+   - for recipient: `donation_count`, `donation_index`;
+   - for sender: `sent_donation_count`, `sent_donation_index`;
+   - global history: `global_donation_count`, `global_donation_index`.
+
+So **on-chain publicly** only donation metadata (addresses, amount, message hash, time) is stored; the **actual message text and amount inside records** are visible only to record owners (via Aleo records).
+
+---
+
+## Public vs Private (Encrypted) Data
+
+### Public Data (on-chain, no Aleo encryption)
+
+- **Profiles** — mapping `profiles: address => ProfileInfo`:
+  - `name`, `bio` (field) — visible to everyone.
+- **Donation metadata** — struct `DonationMeta` in mappings:
+  - `sender`, `recipient` (address),
+  - `amount` (u64),
+  - `message_hash` (field) — hash of message, not the text,
+  - `timestamp` (u64).
+- Mappings with this metadata:
+  - `donation_index`, `sent_donation_index`, `global_donation_index`,
+  - counters: `donation_count`, `sent_donation_count`, `global_donation_count`.
+
+So publicly visible: who, to whom, amount, when, and message hash — **not** the message text.
+
+### Private Data (Aleo encryption / records)
+
+- **RecipientDonation** — record owned by recipient:
+  - owner, sender, **amount**, **message**, timestamp.
+- **SentDonation** — record owned by sender:
+  - owner, recipient, **amount**, **message**, timestamp.
+
+Only the owner’s wallet (e.g. Leo Wallet) can decrypt these records. The `message` text and amount in these records do not leak into the contract’s public state.
+
+**Summary:**
+
+- Public: profiles (name, bio), party addresses, donation amount, timestamp, message hash.
+- Private (Aleo records): full message text and amount inside records, visible only to record owners.
+
+---
+
+## Installing and Configuring the Frontend
+
+### Requirements
+
+- Node.js 18+
+- npm or yarn
+- Leo Wallet extension (or compatible wallet) for signing and record access
+
+### 1. Install dependencies
 
 ```bash
 cd frontend
 npm install
+```
+
+### 2. Program ID (contract)
+
+Open `frontend/src/deployed_program.ts` and set the deployed program id:
+
+```typescript
+export const PROGRAM_ID = "donatu_appv5.aleo";
+```
+
+If you deployed under a different name (e.g. `donatu_app.aleo`), use that. This value is used for contract calls and API requests (mappings, history).
+
+### 3. Public profiles registry (optional)
+
+The frontend loads the list of profile addresses from:
+
+- Local file after build: `/public-profiles.json`
+- GitHub: URL in `frontend/src/utils/explorerAPI.ts` (`PUBLIC_PROFILES_REGISTRY_URL`)
+- Fallback (e.g. Netlify): `PUBLIC_PROFILES_REGISTRY_FALLBACK`
+
+To run locally or with your own list:
+
+- Add `frontend/public/public-profiles.json` with an array of Aleo addresses, e.g.:
+
+```json
+[
+  "aleo1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "aleo1yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+]
+```
+
+If the file is missing, the app can still discover profiles via Provable API (scanning `create_profile` / `update_profile` calls).
+
+### 4. Explorer API
+
+The frontend uses Provable Explorer API:
+
+- Mappings: `https://api.explorer.provable.com/v1/testnet/program/<PROGRAM_ID>/mapping/...`
+- Base URLs are in `frontend/src/utils/explorerAPI.ts` (`MAPPING_URL`, `PROVABLE_API_V1_BASE`, `PROVABLE_API_V2_BASE`).
+
+If your contract is deployed on **testnet** Provable, no changes are needed. For mainnet, update `testnet` in those URLs and in the wallet network.
+
+### 5. Run
+
+```bash
+cd frontend
 npm run dev
 ```
 
-The application will be available at `http://localhost:5173`
+App is available at `http://localhost:5173` by default.
 
-### Smart Contract Setup
+### 6. Production build
 
 ```bash
-# Compile the contract
-leo build
-
-# Deploy to testnet
-leo deploy
+npm run build
 ```
 
-After deployment, update `frontend/src/deployed_program.ts` with your program ID:
+Output goes to `frontend/dist`. For Vercel/Netlify, set the root to `frontend` and build command to `npm run build` (project already has `vercel.json` and `netlify.toml`).
 
-```typescript
-export const PROGRAM_ID = "tipzo_app_v5.aleo";
-```
+### Checklist so everything works
+
+1. **PROGRAM_ID** in `deployed_program.ts` matches the deployed contract.
+2. **Leo Wallet** is installed and connected to **Testnet** (or the network where the contract is deployed).
+3. If needed, update profile registry URLs in `explorerAPI.ts` and add/update `public/public-profiles.json`.
+4. The contract is actually deployed on the chosen network (e.g. Provable testnet) so mapping and global donation history requests return data.
+
+---
 
 ## Project Structure
 
 ```
 tipzo/
 ├── src/
-│   └── main.leo              # Leo smart contract
+│   └── main.leo                 # Smart contract donatu_appv5.aleo
+├── program.json                 # Program metadata (name, version)
+├── deploy.ps1                   # Deploy (Windows)
+├── deploy.sh                    # Deploy (Linux/macOS)
+├── deploy_output/               # Deploy artifacts (if any)
+├── public-profiles.json         # Profile addresses (root)
 ├── frontend/
+│   ├── public/
+│   │   └── public-profiles.json # Registry for frontend
 │   ├── src/
-│   │   ├── components/        # React components (Header, Toast, etc.)
-│   │   ├── pages/            # Application pages (Home, Profile, Search, History)
-│   │   ├── hooks/            # Custom React hooks
-│   │   ├── utils/            # Utilities (Aleo helpers, wallet utils)
-│   │   └── App.tsx           # Main application component
-│   └── package.json
-├── build/                     # Compiled Leo program
-├── deploy_output/            # Deployment artifacts
+│   │   ├── deployed_program.ts # PROGRAM_ID — configure this
+│   │   ├── utils/
+│   │   │   ├── aleo.ts          # Field/string helpers
+│   │   │   └── explorerAPI.ts   # Provable API, profiles, donation history
+│   │   ├── views/               # Landing, Profile, History, Explore, QuickDonate
+│   │   └── hooks/               # useDonationHistory, useWalletRecords, etc.
+│   ├── package.json
+│   ├── vercel.json
+│   └── netlify.toml
 └── README.md
 ```
 
-## Usage
+---
 
-1. **Connect Wallet**: Install Leo Wallet extension and connect your wallet
-2. **Create Profile** (optional): Set up your profile with a nickname and bio
-3. **Find Users**: Search for users by address or nickname
-4. **Send Donation**: Navigate to a user's profile or use the quick donation feature
-5. **View History**: Check your transaction history for sent and received donations
+## Tech Stack
 
-## Development
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS
+- **Chain:** Aleo Testnet (Provable)
+- **Contract:** Leo
+- **Wallet:** Leo Wallet (via @demox-labs/aleo-wallet-adapter-*)
+- **API:** Provable Explorer (mappings, blocks, transactions)
 
-### Smart Contract Functions
-
-- `create_profile(name, bio)` - Create or update user profile
-- `update_profile(name, bio)` - Update existing profile
-- `send_donation(recipient, amount, message, timestamp)` - Send private donation
-- `get_profile(user_address)` - Retrieve user profile
-
-### Frontend Components
-
-- `Header` - Navigation and wallet connection
-- `Home` - Main page with quick donation feature
-- `Profile` - User profile page with donation functionality
-- `Search` - User search interface
-- `History` - Transaction history viewer
-
-### Key Utilities
-
-- `aleo.ts` - Aleo data conversion utilities
-- `walletUtils.ts` - Wallet interaction helpers
-- `walletRecords.ts` - Record fetching and parsing
-- `txCache.ts` - Transaction caching
-
-## Deployment
-
-The contract is currently deployed on Aleo Testnet:
-- **Program ID**: `tipzo_app_v5.aleo`
-- **Network**: Testnet
-- **Explorers**: 
-  - [AleoScan](https://testnet.aleoscan.io/)
-  - [Provable Explorer](https://testnet.explorer.provable.com/)
-
-## Privacy & Security
-
-- All donation amounts and messages are encrypted in private records
-- Only the sender and recipient can decrypt their respective records
-- Profile information (nickname, bio) is public for discoverability
-- No donation data is stored in public blockchain state
-- Zero-knowledge proofs ensure transaction validity without revealing details
+---
 
 ## License
 

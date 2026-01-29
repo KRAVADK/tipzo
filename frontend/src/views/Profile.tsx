@@ -4,12 +4,12 @@ import { UserProfile } from '../utils/explorerAPI';
 import { Save, Wallet, Loader2, DollarSign, X, Twitter } from 'lucide-react';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
 import { getProfileFromChain, addKnownProfileAddress } from '../utils/explorerAPI';
-import { stringToField } from '../utils/aleo';
+import { stringToField, formatAddress } from '../utils/aleo';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 import { WalletAdapterNetwork } from '@demox-labs/aleo-wallet-adapter-base';
 import { PROGRAM_ID } from '../deployed_program';
 import { useParams } from 'react-router-dom';
-import { logger } from '../utils/logger';
+import { logger, _refreshLoggerSettings } from '../utils/logger';
 
 const Profile: React.FC = () => {
   const { address: urlAddress } = useParams<{ address?: string }>();
@@ -78,6 +78,8 @@ const Profile: React.FC = () => {
         enableDebugLogs: updated.enableDebugLogs,
       };
       localStorage.setItem('tipzo_app_settings', JSON.stringify(appSettings));
+      // Let logger re-read updated settings
+      _refreshLoggerSettings();
       if (updated.enableAnimations === false) {
         document.body.classList.add('tipzo-animations-off');
       } else {
@@ -295,11 +297,14 @@ const Profile: React.FC = () => {
             throw new Error(`Invalid recipient address: ${profileAddress}`);
         }
         
-        // STEP 1: Transfer real tokens
+        // Two-step flow:
+        // 1) credits.aleo::transfer_public
+        // 2) donatu_appv5.aleo::send_donation(sender, recipient, amount, message, timestamp)
+        
         const transferTransaction = {
             address: String(publicKey),
             chainId: WalletAdapterNetwork.TestnetBeta,
-            fee: 50000,
+            fee: 10_000,
             transitions: [
                 {
                     program: "credits.aleo",
@@ -311,7 +316,7 @@ const Profile: React.FC = () => {
                 }
             ]
         };
-        
+
         const transferTxId = await requestTransactionWithRetry(adapter, transferTransaction, {
             timeout: 30000, // 30 seconds for transfer
             maxRetries: 3
@@ -319,45 +324,53 @@ const Profile: React.FC = () => {
         if (!transferTxId) {
             throw new Error("Token transfer was rejected or failed");
         }
-        
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // STEP 2: Create donation record
-        // send_donation(recipient, amount, message, timestamp) — contract order
-        // Note: sender is automatically self.caller in the contract, don't pass it
+
         const messageField = stringToField(donationMessage || "");
         const timestamp = Math.floor(Date.now() / 1000);
-        
+
         const donationTransaction = {
             address: String(publicKey),
             chainId: WalletAdapterNetwork.TestnetBeta,
-            fee: 50000,
+            fee: 10_000,
             transitions: [
                 {
                     program: String(PROGRAM_ID),
                     functionName: "send_donation",
                     inputs: [
-                        String(profileAddress),      // recipient (private)
-                        String(amountMicro) + "u64", // amount (private)
-                        String(messageField),        // message (private)
-                        String(timestamp) + "u64"    // timestamp (public)
+                        String(publicKey),               // sender (public)
+                        String(profileAddress),          // recipient (public)
+                        String(amountMicro) + "u64",     // amount (private)
+                        String(messageField),            // message (private)
+                        String(timestamp) + "u64"        // timestamp (public)
                     ]
                 }
             ]
         };
-        
+
         const donationTxId = await requestTransactionWithRetry(adapter, donationTransaction, {
             timeout: 30000, // 30 seconds for donation record
             maxRetries: 3
         });
         if (!donationTxId) {
-            console.warn("Donation record creation failed, but tokens were transferred");
-            alert(`Tokens transferred! Transaction: ${transferTxId}\nNote: Donation record creation failed.`);
+            console.warn("Donation transaction failed");
+            alert("Donation transaction failed or was rejected.");
             return;
         }
         
         logger.donation.sent(donationTxId);
-        alert(`Donation sent successfully!\n\nFunction: send_donation\nTransfer: ${transferTxId.slice(0, 8)}...\nRecord: ${donationTxId.slice(0, 8)}...`);
+        window.dispatchEvent(new CustomEvent('tipzo-notification', {
+          detail: {
+            id: donationTxId,
+            type: 'sent',
+            message: `Sent ${amountNum} ALEO to ${formatAddress(profileAddress)}`,
+            timestamp: Date.now(),
+          }
+        }));
+        alert(
+          `Donation sent successfully!\n\n` +
+          `Transfer tx: ${transferTxId.slice(0, 8)}...\n` +
+          `Record tx (send_donation): ${donationTxId.slice(0, 8)}...`
+        );
         
         // Clear donation form
         setDonationAmount("1");
@@ -393,7 +406,9 @@ const Profile: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-5xl font-black mb-8">{isViewingOtherProfile ? "PROFILE" : "EDIT PROFILE"}</h1>
+      <h1 className="text-5xl font-black mb-8 inline-block bg-white px-4 py-1 border-2 border-black shadow-neo-sm">
+        {isViewingOtherProfile ? "PROFILE" : "EDIT PROFILE"}
+      </h1>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {/* Sidebar / Preview */}
@@ -552,7 +567,7 @@ const Profile: React.FC = () => {
               {/* Profile-level donation preferences */}
               <NeoCard color="white" className="space-y-4">
                 <h2 className="text-xl font-black">Profile Donation Preferences</h2>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-700">
                   These settings are stored locally in your browser and help pre-fill donation forms.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -603,7 +618,7 @@ const Profile: React.FC = () => {
               {/* App-wide settings */}
               <NeoCard color="white" className="space-y-4">
                 <h2 className="text-xl font-black">App Settings</h2>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-700">
                   These settings affect how TipZo behaves on this device.
                 </p>
                 <div className="space-y-3">

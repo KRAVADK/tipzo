@@ -2,17 +2,14 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { NeoCard, NeoBadge, NeoButton, WalletRequiredModal } from '../components/NeoComponents';
 import { ArrowUpRight, ArrowDownLeft, EyeOff, Lock, Loader2, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { useWalletRecords, RecordDonation } from '../hooks/useWalletRecords';
-import { PROGRAM_ID } from '../deployed_program';
-import { formatAddress, fieldToString } from '../utils/aleo';
+import { formatAddress } from '../utils/aleo';
 import { useWallet } from '@demox-labs/aleo-wallet-adapter-react';
-import { addKnownProfileAddress } from '../utils/explorerAPI';
+import { getDonationHistoryForAddress, OnChainDonationMeta } from '../utils/explorerAPI';
 import { logger } from '../utils/logger';
 
 const History: React.FC = () => {
   const { publicKey } = useWallet();
-  const { fetchRecords, isLoading, hasPermission } = useWalletRecords();
-  const [records, setRecords] = useState<RecordDonation[]>([]);
+  const [records, setRecords] = useState<OnChainDonationMeta[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [chartExpanded, setChartExpanded] = useState(false);
   const [showWalletModal, setShowWalletModal] = useState(false);
@@ -20,32 +17,9 @@ const History: React.FC = () => {
   const loadRecords = async () => {
     setRefreshing(true);
     logger.debug("[History] Loading records for:", publicKey);
-    const data = await fetchRecords(PROGRAM_ID);
-    logger.debug("[History] Loaded records:", data.length);
+    const data = publicKey ? await getDonationHistoryForAddress(publicKey) : [];
+    logger.debug("[History] Loaded on-chain donations:", data.length);
     setRecords(data);
-    
-    // Add addresses from donation records to known profiles list
-    // This helps blockchain scanning discover these profiles
-    const addressesToCheck = new Set<string>();
-    data.forEach(record => {
-      if (record.recipient) {
-        addressesToCheck.add(record.recipient);
-      }
-      if (record.sender) {
-        addressesToCheck.add(record.sender);
-      }
-    });
-    
-    // Add to known profiles list (for blockchain scanning)
-    if (addressesToCheck.size > 0) {
-      addressesToCheck.forEach(address => {
-        addKnownProfileAddress(address);
-      });
-      
-      // Trigger Explore update
-      window.dispatchEvent(new CustomEvent('profileUpdated'));
-    }
-    
     setRefreshing(false);
   };
 
@@ -53,7 +27,7 @@ const History: React.FC = () => {
     if (publicKey) {
         loadRecords();
     }
-  }, [publicKey, fetchRecords]);
+  }, [publicKey]);
 
   // Calculate analytics
   const analyticsData = useMemo(() => {
@@ -64,13 +38,13 @@ const History: React.FC = () => {
         // Timestamp is in seconds, convert to milliseconds for Date
         const date = new Date(record.timestamp * 1000);
         const dayIndex = date.getDay();
-        const amount = record.amount / 1_000_000; // Convert to credits
+        const amount = record.amount / 1_000_000; // Convert to credits (assuming microcredits)
         
-        if (record.sender) {
-            // RecipientDonation (Incoming)
+        if (record.recipient === publicKey) {
+            // Incoming
             data[dayIndex].income += amount;
-        } else if (record.recipient) {
-            // SentDonation (Outgoing)
+        } else if (record.sender === publicKey) {
+            // Outgoing
             data[dayIndex].expense += amount;
         }
     });
@@ -81,7 +55,9 @@ const History: React.FC = () => {
   const totalReceived = useMemo(() => {
      // Sum of received donations only
      return records.reduce((acc, curr) => {
-         if (curr.sender) return acc + (curr.amount / 1_000_000);
+         if (publicKey && curr.recipient === publicKey) {
+            return acc + (curr.amount / 1_000_000);
+         }
          return acc;
      }, 0);
   }, [records]);
@@ -89,20 +65,14 @@ const History: React.FC = () => {
   // Separate sent and received transactions
   const sentTransactions = useMemo(() => {
     const sent = records.filter(record => {
-      // SentDonation: has recipient, no sender, and owner matches current user
-      const isSent = record.recipient && !record.sender;
-      const isOwner = publicKey && record.owner?.toLowerCase() === publicKey.toLowerCase();
-      return isSent && isOwner;
+      return publicKey && record.sender === publicKey;
     });
     return sent.sort((a, b) => b.timestamp - a.timestamp);
   }, [records, publicKey]);
 
   const receivedTransactions = useMemo(() => {
     const received = records.filter(record => {
-      // RecipientDonation: has sender, no recipient, and owner matches current user
-      const isReceived = record.sender && !record.recipient;
-      const isOwner = publicKey && record.owner?.toLowerCase() === publicKey.toLowerCase();
-      return isReceived && isOwner;
+      return publicKey && record.recipient === publicKey;
     });
     return received.sort((a, b) => b.timestamp - a.timestamp);
   }, [records, publicKey]);
@@ -140,9 +110,11 @@ const History: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
        <div className="flex justify-between items-center">
-         <h1 className="text-5xl font-black">HISTORY & ANALYTICS</h1>
+         <h1 className="text-5xl font-black inline-block bg-white px-4 py-1 border-2 border-black shadow-neo-sm">
+           HISTORY & ANALYTICS
+         </h1>
          <div className="flex items-center gap-4">
-             <NeoButton onClick={loadRecords} disabled={isLoading || refreshing} size="sm">
+           <NeoButton onClick={loadRecords} disabled={refreshing} size="sm">
                  {refreshing ? <Loader2 className="animate-spin" size={18}/> : <RefreshCw size={18}/>}
              </NeoButton>
              <div className="bg-tipzo-green border-2 border-black px-4 py-2 font-bold shadow-neo">
@@ -151,11 +123,9 @@ const History: React.FC = () => {
          </div>
        </div>
 
-       {hasPermission === false && (
-           <div className="bg-yellow-100 border-2 border-yellow-500 p-4 rounded font-bold text-yellow-800">
-               ⚠️ Please grant "OnChainHistory" permission in your wallet to view private records.
-           </div>
-       )}
+      {/* Note: OnChainHistory path is disabled for now because
+          current wallets return INVALID_PARAMS for this program.
+          We therefore hide the old permission warning banner. */}
 
        {/* Analytics Chart - Collapsible */}
        <NeoCard color="white" className="w-full flex flex-col">
@@ -195,11 +165,11 @@ const History: React.FC = () => {
        <div className="space-y-8">
           {/* Received Transactions */}
           <div>
-            <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+            <h3 className="text-2xl font-bold mb-4 flex items-center gap-2 bg-white inline-flex px-3 py-1 border-2 border-black shadow-neo-sm">
               <ArrowDownLeft size={24} className="text-green-600" />
               Received Donations ({receivedTransactions.length})
             </h3>
-            {receivedTransactions.length === 0 && !isLoading && (
+            {receivedTransactions.length === 0 && !refreshing && (
               <div className="text-center py-10 text-gray-500 font-bold bg-white border-2 border-black p-4">
                 No received donations found.
               </div>
@@ -213,7 +183,7 @@ const History: React.FC = () => {
                 const dateStr = isValidDate 
                   ? date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
                   : `Invalid timestamp: ${tx.timestamp}`;
-                const message = fieldToString(tx.message);
+                const message = ""; // message_hash is not decodable to original message
 
                 return (
                   <div key={`received-${idx}`} className="bg-white border-2 border-black p-4 shadow-neo-sm flex flex-col md:flex-row items-center justify-between gap-4 transition-transform hover:translate-x-1">
@@ -246,11 +216,11 @@ const History: React.FC = () => {
 
           {/* Sent Transactions */}
           <div>
-            <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+            <h3 className="text-2xl font-bold mb-4 flex items-center gap-2 bg-white inline-flex px-3 py-1 border-2 border-black shadow-neo-sm">
               <ArrowUpRight size={24} className="text-orange-600" />
               Sent Donations ({sentTransactions.length})
             </h3>
-            {sentTransactions.length === 0 && !isLoading && (
+            {sentTransactions.length === 0 && !refreshing && (
               <div className="text-center py-10 text-gray-500 font-bold bg-white border-2 border-black p-4">
                 No sent donations found.
               </div>
@@ -264,7 +234,7 @@ const History: React.FC = () => {
                 const dateStr = isValidDate 
                   ? date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
                   : `Invalid timestamp: ${tx.timestamp}`;
-                const message = fieldToString(tx.message);
+                const message = ""; // message_hash is not decodable
 
                 return (
                   <div key={`sent-${idx}`} className="bg-white border-2 border-black p-4 shadow-neo-sm flex flex-col md:flex-row items-center justify-between gap-4 transition-transform hover:translate-x-1">
@@ -295,9 +265,9 @@ const History: React.FC = () => {
             </div>
           </div>
 
-          {records.length === 0 && !isLoading && (
+          {records.length === 0 && !refreshing && (
             <div className="text-center py-10 text-gray-500 font-bold">
-              No donation records found. Make sure you have granted "OnChainHistory" permission in your wallet.
+              No donation records found yet for this wallet.
             </div>
           )}
        </div>

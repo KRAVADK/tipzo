@@ -3,6 +3,10 @@ import { useState, useCallback } from "react";
 import { requestRecordsWithRetry, decryptWithRetry } from "../utils/walletUtils";
 import { logger } from "../utils/logger";
 
+// Cache to remember if requestRecordPlaintexts is supported by the current wallet
+// so we don't keep spamming INVALID_PARAMS errors on every load.
+let requestPlaintextsSupported: boolean | null = null;
+
 export interface RecordDonation {
     owner: string;
     sender?: string; // Only in RecipientDonation
@@ -26,45 +30,12 @@ export const useWalletRecords = () => {
         
         setIsLoading(true);
         try {
-            // Attempt to fetch records via requestRecordPlaintexts (requires OnChainHistory permission)
+            // NOTE: requestRecordPlaintexts path is temporarily disabled because
+            // current Leo wallet returns INVALID_PARAMS for this program.
+            // We rely only on the encrypted requestRecords + decrypt flow for now.
             let records: Array<{ id?: string; plaintext: string }> = [];
             
-            if (adapter.requestRecordPlaintexts) {
-                try {
-                    // requestRecordPlaintexts may need programId as a parameter or may need to be called differently
-                    // Some adapters expect an object with programId, others expect just the string
-                    // Try both approaches
-                    let result;
-                    try {
-                        // First try: pass programId as string
-                        result = await adapter.requestRecordPlaintexts(programId);
-                    } catch (e) {
-                        // Second try: pass as object if string fails
-                        if (typeof programId === 'string' && programId) {
-                            result = await adapter.requestRecordPlaintexts({ programId });
-                        } else {
-                            throw e;
-                        }
-                    }
-                    
-                    records = Array.isArray(result) ? result : [];
-                    if (records && records.length > 0) {
-                        setHasPermission(true);
-                        logger.debug(`[DonationRecords] Fetched ${records.length} records via requestRecordPlaintexts`);
-                    }
-                } catch (error: any) {
-                    const errorMsg = error?.message || String(error);
-                    if (errorMsg.includes("INVALID_PARAMS") || errorMsg.includes("permission") || errorMsg.includes("Permission")) {
-                        console.warn("⚠️ [DonationRecords] requestRecordPlaintexts requires OnChainHistory permission or invalid params");
-                        console.warn("⚠️ [DonationRecords] Error details:", errorMsg);
-                        setHasPermission(false);
-                    } else {
-                        console.warn("[DonationRecords] requestRecordPlaintexts failed:", error);
-                    }
-                }
-            }
-            
-            // Fallback: attempt via requestRecords (encrypted) with retry
+            // Attempt via requestRecords (encrypted) with retry
             if (records.length === 0 && adapter.requestRecords) {
                 try {
                     logger.debug("[DonationRecords] Fetching encrypted records...");
@@ -102,7 +73,9 @@ export const useWalletRecords = () => {
                                             plaintext: plaintext,
                                         });
                                     } else {
-                                        console.warn(`[DonationRecords] ⚠️ Record ${i + 1} doesn't look like a valid record (doesn't start with 'record1'):`, ciphertext?.substring(0, 50));
+                                        // In many wallets, non-donation records or metadata are returned here.
+                                        // Silently skip anything that doesn't look like an Aleo record ciphertext
+                                        // to avoid spamming the console.
                                     }
                                 } catch (decryptErr) {
                                     console.error(`[DonationRecords] ❌ Failed to decrypt record ${i + 1}:`, decryptErr);
@@ -124,9 +97,9 @@ export const useWalletRecords = () => {
             }
             
             if (!records || records.length === 0) {
-                if (hasPermission === null) {
-                    setHasPermission(false);
-                }
+                // No records found. We DON'T flip hasPermission to false here,
+                // because current wallets may simply not expose history for this program
+                // and we don't want to show a misleading "grant OnChainHistory" banner.
                 return [];
             }
             

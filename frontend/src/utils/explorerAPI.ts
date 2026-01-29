@@ -30,6 +30,15 @@ export interface UserProfile {
     bio: string;
 }
 
+// Mirrors DonationMeta in donatu_appv5.aleo
+export interface OnChainDonationMeta {
+    sender: string;
+    recipient: string;
+    amount: number;
+    message_hash: string;
+    timestamp: number;
+}
+
 const MAPPING_URL = "https://api.explorer.provable.com/v1/testnet/program";
 const PROVABLE_API_V1_BASE = "https://api.explorer.provable.com/v1/testnet";
 const PROVABLE_API_V2_BASE = "https://api.provable.com/v2/testnet";
@@ -414,11 +423,12 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
         }
         
         if (!response.ok) {
-            // 404 is normal if profile doesn't exist yet
+            // 404 is normal if profile doesn't exist yet – just return null without noisy logs
             if (response.status === 404) {
                 return null;
             }
-            console.warn("Profile not found or error fetching:", response.statusText);
+            // Other errors: keep console noise low, only log in dev via logger.debug
+            logger.debug("Profile not found or error fetching:", response.status, response.statusText);
             return null;
         }
 
@@ -431,7 +441,7 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
         }
         
         if (!data) {
-            console.warn("⚠️ Empty data returned from API");
+            // Empty mapping value – treat as "no profile", no warning
             return null;
         }
 
@@ -506,4 +516,138 @@ export const getProfileFromChain = async (address: string): Promise<UserProfile 
         console.error("Error fetching profile:", error);
         return null;
     }
+};
+
+// ----- On-chain donation history (donatu_appv5.aleo) -----
+
+// Get global number of donations from mapping global_donation_count[0]
+export const getGlobalDonationCount = async (): Promise<number> => {
+    try {
+        const url = `${MAPPING_URL}/${PROGRAM_ID}/mapping/global_donation_count/0`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            if (response.status === 404) {
+                return 0;
+            }
+            logger.debug("Failed to get global donation count:", response.status, response.statusText);
+            return 0;
+        }
+        const data = await response.json();
+        if (typeof data === "string") {
+            const match = data.match(/(\d+)/);
+            return match ? parseInt(match[1], 10) : 0;
+        } else if (typeof data === "number") {
+            return data;
+        } else if (data && typeof data.value === "number") {
+            return data.value;
+        }
+        return 0;
+    } catch (error) {
+        logger.debug("Error fetching global donation count:", error);
+        return 0;
+    }
+};
+
+// Get DonationMeta at global_donation_index[i]
+export const getGlobalDonationAtIndex = async (index: number): Promise<OnChainDonationMeta | null> => {
+    try {
+        const url = `${MAPPING_URL}/${PROGRAM_ID}/mapping/global_donation_index/${index}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            if (response.status === 404) {
+                return null;
+            }
+            logger.debug(`Failed to get global donation at index ${index}:`, response.status, response.statusText);
+            return null;
+        }
+        const data = await response.json();
+
+        // Expected shapes:
+        // 1) string: "{ sender: aleo1..., recipient: aleo1..., amount: 123u64, message_hash: 123field, timestamp: 123u64 }"
+        // 2) object: { sender: "...", recipient: "...", amount: 123, message_hash: "...", timestamp: 123 }
+
+        const parseAmount = (raw: any): number => {
+            if (typeof raw === "number") return raw;
+            if (typeof raw === "string") {
+                const match = raw.match(/(\d+)/);
+                return match ? parseInt(match[1], 10) : 0;
+            }
+            return 0;
+        };
+
+        const parseTimestamp = (raw: any): number => {
+            if (typeof raw === "number") return raw;
+            if (typeof raw === "string") {
+                const match = raw.match(/(\d+)/);
+                return match ? parseInt(match[1], 10) : 0;
+            }
+            return 0;
+        };
+
+        if (typeof data === "string") {
+            const normalized = data.replace(/\s+/g, " ");
+            const senderMatch = normalized.match(/sender:\s*(aleo1[a-z0-9]+)/i);
+            const recipientMatch = normalized.match(/recipient:\s*(aleo1[a-z0-9]+)/i);
+            const amountMatch = normalized.match(/amount:\s*(\d+)u64/i);
+            const msgHashMatch = normalized.match(/message_hash:\s*([0-9a-zA-Z]+field)/i);
+            const tsMatch = normalized.match(/timestamp:\s*(\d+)u64/i);
+
+            if (!senderMatch || !recipientMatch || !amountMatch || !tsMatch || !msgHashMatch) {
+                return null;
+            }
+
+            return {
+                sender: senderMatch[1],
+                recipient: recipientMatch[1],
+                amount: parseAmount(amountMatch[1]),
+                message_hash: msgHashMatch[1],
+                timestamp: parseTimestamp(tsMatch[1]),
+            };
+        } else if (data && typeof data === "object") {
+            const obj: any = data.value || data;
+            if (!obj.sender || !obj.recipient) {
+                return null;
+            }
+            return {
+                sender: String(obj.sender),
+                recipient: String(obj.recipient),
+                amount: parseAmount(obj.amount),
+                message_hash: String(obj.message_hash || ""),
+                timestamp: parseTimestamp(obj.timestamp),
+            };
+        }
+
+        return null;
+    } catch (error) {
+        logger.debug(`Error fetching global donation at index ${index}:`, error);
+        return null;
+    }
+};
+
+// Get donation history for specific address using global_donation_index
+export const getDonationHistoryForAddress = async (address: string): Promise<OnChainDonationMeta[]> => {
+    if (!address || !address.startsWith("aleo1")) return [];
+
+    const result: OnChainDonationMeta[] = [];
+    const count = await getGlobalDonationCount();
+    if (count === 0) return [];
+
+    const maxToScan = Math.min(count, 500); // safety limit
+
+    const fetches: Promise<OnChainDonationMeta | null>[] = [];
+    for (let i = 0; i < maxToScan; i++) {
+        fetches.push(getGlobalDonationAtIndex(i));
+    }
+
+    const metas = await Promise.all(fetches);
+    metas.forEach((meta) => {
+        if (!meta) return;
+        if (meta.sender === address || meta.recipient === address) {
+            result.push(meta);
+        }
+    });
+
+    // Sort newest first by timestamp
+    result.sort((a, b) => b.timestamp - a.timestamp);
+    return result;
 };

@@ -6,7 +6,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { PROGRAM_ID } from '../deployed_program';
-import { stringToField } from '../utils/aleo';
+import { stringToField, formatAddress } from '../utils/aleo';
 import { getProfileFromChain, getAllRegisteredProfiles, addKnownProfileAddress, getKnownProfileAddresses } from '../utils/explorerAPI';
 import { requestTransactionWithRetry } from '../utils/walletUtils';
 import { logger } from '../utils/logger';
@@ -314,12 +314,14 @@ const Explore: React.FC = () => {
             throw new Error(`Invalid creator ID: ${creator.id}`);
         }
         
-        // STEP 1: Transfer real tokens from sender to recipient
-        logger.debug("Transferring tokens...");
-        const transferTransaction = {
+        // Single transaction: transfer_public + send_donation
+        const messageField = stringToField(donationMessage || ""); // Use message from input
+        const timestamp = Math.floor(Date.now() / 1000);
+
+        const donationTransaction = {
             address: String(publicKey),
             chainId: WalletAdapterNetwork.TestnetBeta,
-            fee: 50000, // Fee for transfer
+            fee: 50000, // ~0.05 ALEO combined fee
             transitions: [
                 {
                     program: "credits.aleo",
@@ -328,60 +330,41 @@ const Explore: React.FC = () => {
                         String(creator.id), // recipient (public)
                         String(amountMicro) + "u64" // amount (public)
                     ]
-                }
-            ]
-        };
-        
-        const transferTxId = await requestTransactionWithRetry(adapter, transferTransaction, {
-            timeout: 30000, // 30 seconds for transfer
-            maxRetries: 3
-        });
-        if (!transferTxId) {
-            throw new Error("Token transfer was rejected or failed");
-        }
-        
-        logger.debug("Transfer confirmed:", transferTxId);
-        
-        // Wait a bit for transfer to be processed
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        
-        // STEP 2: Create donation record (private)
-        // send_donation(recipient, amount, message, timestamp) — contract order
-        // Note: sender is automatically self.caller in the contract, don't pass it
-        logger.debug("Creating donation record...");
-        const messageField = stringToField(donationMessage || ""); // Use message from input
-        const timestamp = Math.floor(Date.now() / 1000);
-        
-        const donationTransaction = {
-            address: String(publicKey),
-            chainId: WalletAdapterNetwork.TestnetBeta,
-            fee: 50000, // Minimal fee for donation record
-            transitions: [
+                },
                 {
                     program: String(PROGRAM_ID),
                     functionName: "send_donation",
                     inputs: [
-                        String(creator.id),      // recipient (private)
-                        String(amountMicro) + "u64",  // amount (private)
-                        String(messageField),    // message (private)
-                        String(timestamp) + "u64"     // timestamp (public)
+                        String(publicKey),              // sender (public)
+                        String(creator.id),             // recipient (public)
+                        String(amountMicro) + "u64",    // amount (private)
+                        String(messageField),           // message (private)
+                        String(timestamp) + "u64"       // timestamp (public)
                     ]
                 }
             ]
         };
-        
+
         const donationTxId = await requestTransactionWithRetry(adapter, donationTransaction, {
             timeout: 30000, // 30 seconds for donation record
             maxRetries: 3
         });
         if (!donationTxId) {
-            console.warn("Donation record creation failed, but tokens were transferred");
-            alert(`Tokens transferred! Transaction: ${transferTxId}\nNote: Donation record creation failed.`);
+            console.warn("Donation transaction failed");
+            alert("Donation transaction failed or was rejected.");
             return;
         }
         
         logger.donation.sent(donationTxId);
-        alert(`Donation sent successfully!\n\nFunction: send_donation\nTransfer: ${transferTxId.slice(0, 8)}...\nRecord: ${donationTxId.slice(0, 8)}...`);
+        window.dispatchEvent(new CustomEvent('tipzo-notification', {
+          detail: {
+            id: donationTxId,
+            type: 'sent',
+            message: `Sent ${amountNum} ALEO to ${formatAddress(creator.id)}`,
+            timestamp: Date.now(),
+          }
+        }));
+        alert(`Donation sent successfully!\n\nTransaction: ${donationTxId.slice(0, 8)}...\nIncludes: transfer_public + send_donation`);
         
         // Clear message after successful donation
         setDonationMessage("");
@@ -538,17 +521,19 @@ const Explore: React.FC = () => {
       
       {creators.length === 0 && !loading && (
         <div className="text-center py-20">
-          <h3 className="text-2xl font-bold text-gray-400 mb-2">
-            {searchTerm ? (searchError || "No profile found for this address.") : "Search by Aleo address or nickname to discover creators."}
-          </h3>
-          {searchError && (
-            <p className="text-sm text-gray-500 mt-2">{searchError}</p>
-          )}
-          {!searchTerm && (
-            <p className="text-sm text-gray-500 mt-4">
-              Enter an Aleo address (aleo1...) or search by nickname to find and support creators.
-            </p>
-          )}
+          <div className="inline-block bg-white px-6 py-4 border-2 border-black shadow-neo-sm">
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">
+              {searchTerm ? (searchError || "No profile found for this address.") : "Search by Aleo address or nickname to discover creators."}
+            </h3>
+            {searchError && (
+              <p className="text-sm text-gray-600 mt-2">{searchError}</p>
+            )}
+            {!searchTerm && (
+              <p className="text-sm text-gray-800 mt-4">
+                Enter an Aleo address (aleo1...) or search by nickname to find and support creators.
+              </p>
+            )}
+          </div>
         </div>
       )}
       
