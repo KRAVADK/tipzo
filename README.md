@@ -260,4 +260,4 @@ tipzo/
 
 ## License
 
-MIT
+MIT © 2026
